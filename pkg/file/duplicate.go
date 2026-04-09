@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Mr-xiaotian/CelestialForge/pkg/number"
 	"github.com/Mr-xiaotian/CelestialForge/pkg/str"
 )
 
@@ -96,27 +97,6 @@ func GetDuplicateFile(path string) (map[FileInfo][]string, error) {
 	return fileHashDuplicates, nil
 }
 
-func humanBytes(b int64) string {
-	const (
-		KB = 1024
-		MB = KB * 1024
-		GB = MB * 1024
-		TB = GB * 1024
-	)
-	switch {
-	case b >= TB:
-		return fmt.Sprintf("%.2f TB", float64(b)/float64(TB))
-	case b >= GB:
-		return fmt.Sprintf("%.2f GB", float64(b)/float64(GB))
-	case b >= MB:
-		return fmt.Sprintf("%.2f MB", float64(b)/float64(MB))
-	case b >= KB:
-		return fmt.Sprintf("%.2f KB", float64(b)/float64(KB))
-	default:
-		return fmt.Sprintf("%d B", b)
-	}
-}
-
 // DuplicateReport 生成重复文件的详细报告
 func DuplicateReport(identicalMap map[FileInfo][]string) string {
 	if len(identicalMap) == 0 {
@@ -159,18 +139,18 @@ func DuplicateReport(identicalMap map[FileInfo][]string) string {
 
 		data := make([][]string, len(e.paths))
 		for i, p := range e.paths {
-			data[i] = []string{p, humanBytes(e.info.Size)}
+			data[i] = []string{p, number.HumanBytes(e.info.Size)}
 		}
 		tableText := str.FormatTable(data, []string{"Item", "Size"})
 
-		report = append(report, fmt.Sprintf("%d.Hash: %s (Size: %s)", idx, e.info.Hash, humanBytes(itemsSize)))
+		report = append(report, fmt.Sprintf("%d.Hash: %s (Size: %s)", idx, e.info.Hash, number.HumanBytes(itemsSize)))
 		report = append(report, tableText)
 	}
 
-	report = append(report, fmt.Sprintf("Total size of duplicate items: %s", humanBytes(totalSize)))
+	report = append(report, fmt.Sprintf("Total size of duplicate items: %s", number.HumanBytes(totalSize)))
 	report = append(report, fmt.Sprintf("Total number of duplicate items: %d", totalItemNum))
 	report = append(report, fmt.Sprintf("Item with the most duplicates: %s(hash) %s(size) %d(number)",
-		maxItemEntry.info.Hash, humanBytes(maxItemEntry.info.Size), maxItemNum))
+		maxItemEntry.info.Hash, number.HumanBytes(maxItemEntry.info.Size), maxItemNum))
 
 	return strings.Join(report, "\n")
 }
