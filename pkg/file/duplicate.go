@@ -5,34 +5,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Mr-xiaotian/CelestialForge/pkg/flow"
 	"github.com/Mr-xiaotian/CelestialForge/pkg/str"
 	"github.com/Mr-xiaotian/CelestialForge/pkg/units"
 )
-
-type flowResult struct {
-	path string
-	hash string
-}
-
-type flowError struct {
-	path string
-	err  error
-}
-
-func worker(tasks <-chan string, results chan<- flowResult, errors chan<- flowError) {
-	for task := range tasks {
-		hash, err := GetFileSHA1(task)
-		if err != nil {
-			errors <- flowError{path: task, err: err}
-		} else {
-			results <- flowResult{path: task, hash: hash}
-		}
-	}
-}
-
-func processSuccess(result flowResult) []string {
-	return []string{result.path, result.hash}
-}
 
 func GetDuplicateFile(path string) (map[FileInfo][]string, error) {
 	fileInfoMap, err := GetFilesInfoRecursive(path)
@@ -56,30 +32,17 @@ func GetDuplicateFile(path string) (map[FileInfo][]string, error) {
 	}
 
 	// 利用hash来进行二次判断
-	tasks := make(chan string, len(fileSizeDuplicates))
-	results := make(chan flowResult, len(fileSizeDuplicates))
-	errors := make(chan flowError, len(fileSizeDuplicates))
-	numWorkers := 3
-
-	// 启动工作协程
-	for i := 0; i < numWorkers; i++ {
-		go worker(tasks, results, errors)
-	}
-
-	// 发送任务
-	for _, path := range fileSizeDuplicates {
-		tasks <- path
-	}
-	close(tasks)
+	executor := flow.NewExecutor(GetFileSHA1, 3)
+	go executor.Start(fileSizeDuplicates)
 
 	// 收集结果
 	fileHashMap := map[string][]string{}
 	for i := 0; i < len(fileSizeDuplicates); i++ {
 		select {
-		case res := <-results:
-			fileHashMap[res.hash] = append(fileHashMap[res.hash], res.path)
-		case err := <-errors:
-			return nil, err.err
+		case res := <-executor.ResultChan:
+			fileHashMap[res.Result] = append(fileHashMap[res.Result], res.Task)
+		case err := <-executor.ErrorChan:
+			return nil, err.Error
 		}
 	}
 
