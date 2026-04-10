@@ -33,8 +33,28 @@ func debug_bytes() {
 	fmt.Printf("bytes = %d\n", sum.Int64()) // 2097152000
 }
 
+func debug_size() {
+	dirSize, err := file.GetDirSize(`D:\Project\CelestialForge`)
+	if err != nil {
+		fmt.Printf("GetDirSize error: %v\n", err)
+		return
+	}
+	fmt.Printf("dirSize = %s\n", dirSize)
+}
+
+func debug_mtime() {
+	dirMtime, err := file.GetDirMtime(`D:\Project\CelestialForge`)
+	if err != nil {
+		fmt.Printf("GetDirMtime error: %v\n", err)
+		return
+	}
+	fmt.Printf("dirMtime = %s\n", dirMtime)
+}
+
 func main() {
 	// debug_info()
-	debug_duplicate()
+	// debug_duplicate()
 	// debug_bytes()
+	// debug_size()
+	debug_mtime()
 }

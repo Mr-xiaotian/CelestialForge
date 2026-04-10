@@ -2,7 +2,9 @@ package file
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -18,4 +20,24 @@ func GetFileMtime(path string) (time.Time, error) {
 	}
 
 	return info.ModTime(), nil
+}
+
+// GetDirMtime 返回目录下所有文件的最后修改时间
+func GetDirMtime(path string) (time.Time, error) {
+	dirMtime := time.Time{}
+
+	err := filepath.WalkDir(path, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err // 跳过无法访问的文件
+		}
+		if !d.IsDir() {
+			info, _ := d.Info()
+			if info.ModTime().After(dirMtime) {
+				dirMtime = info.ModTime()
+			}
+		}
+		return nil
+	})
+
+	return dirMtime, err
 }

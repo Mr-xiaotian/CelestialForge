@@ -138,14 +138,14 @@ func DuplicateReport(identicalMap map[FileInfo][]string) string {
 		}
 		tableText := str.FormatTable(data, []string{"Item", "Size"})
 
-		report = append(report, fmt.Sprintf("%d.Hash: %s (Size: %s)", idx, e.info.Hash, itemsSize.String()))
+		report = append(report, fmt.Sprintf("%d.Hash: %s (Size: %s)", idx, e.info.Hash, itemsSize))
 		report = append(report, tableText)
 	}
 
-	report = append(report, fmt.Sprintf("Total size of duplicate items: %s", totalSize.String()))
+	report = append(report, fmt.Sprintf("Total size of duplicate items: %s", totalSize))
 	report = append(report, fmt.Sprintf("Total number of duplicate items: %d", totalItemNum))
 	report = append(report, fmt.Sprintf("Item with the most duplicates: %s(hash) %s(size) %d(number)",
-		maxItemEntry.info.Hash, maxItemEntry.info.Size.String(), maxItemNum))
+		maxItemEntry.info.Hash, maxItemEntry.info.Size, maxItemNum))
 
 	return strings.Join(report, "\n")
 }
