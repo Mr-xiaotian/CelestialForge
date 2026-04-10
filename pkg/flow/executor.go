@@ -1,73 +1,90 @@
 package flow
 
-// ExecuteTask 输入类型
-type ExecuteTask[T any] struct {
-	ID   int
-	Task T
+import (
+	"sync"
+)
+
+// Payload is the unified data carrier for pipeline stages.
+// ID tracks the task through the pipeline for tracing back to the original input.
+type Payload[V any] struct {
+	ID    int
+	Value V
 }
 
-// ExecuteResult 输出类型
-type ExecuteResult[T any, R any] struct {
-	Task   T
-	Result R
-}
-
-// ExecuteError 错误包装
-type ExecuteError[T any] struct {
-	Task  T
+// ExecuteError wraps a failed task
+type ExecuteError struct {
+	ID    int
 	Error error
 }
 
 type Executor[T any, R any] struct {
-	processor  func(T) (R, error) // 可替换的处理函数
+	processor  func(T) (R, error)
 	numWorkers int
 
-	TaskChan   chan ExecuteTask[T]
-	ResultChan chan ExecuteResult[T, R]
-	ErrorChan  chan ExecuteError[T]
+	TaskChan chan Payload[T]
+	SuccChan chan Payload[R]
+	ErrChan  chan ExecuteError
+
+	OnProgress func(completed, total int) // 可选进度回调
+	Counter
 }
 
 func (e *Executor[T, R]) worker() {
-	for task := range e.TaskChan {
-		result, err := e.processor(task.Task)
+	for p := range e.TaskChan {
+		result, err := e.processor(p.Value)
 		if err != nil {
-			e.handleTaskError(ExecuteError[T]{Task: task.Task, Error: err})
+			e.handleTaskError(p, err)
 		} else {
-			e.processTaskSuccess(ExecuteResult[T, R]{Task: task.Task, Result: result})
+			e.processTaskSuccess(p, result)
 		}
+		e.reportProgress()
 	}
 }
 
-func (e *Executor[T, R]) processTaskSuccess(result ExecuteResult[T, R]) {
-	e.ResultChan <- result
+func (e *Executor[T, R]) reportProgress() {
+	if e.OnProgress != nil {
+		e.OnProgress(e.GetComplated(), e.GetTotal())
+	}
 }
 
-func (e *Executor[T, R]) handleTaskError(err ExecuteError[T]) {
-	e.ErrorChan <- err
+func (e *Executor[T, R]) processTaskSuccess(taskPayload Payload[T], result R) {
+	e.SuccChan <- Payload[R]{ID: taskPayload.ID, Value: result}
+	e.AddSuccess(1)
+}
+
+func (e *Executor[T, R]) handleTaskError(taskPayload Payload[T], err error) {
+	e.ErrChan <- ExecuteError{ID: taskPayload.ID, Error: err}
+	e.AddFailed(1)
 }
 
 func (e *Executor[T, R]) Start(tasks []T) {
+	e.total = len(tasks)
+
+	var wg sync.WaitGroup
 	for i := 0; i < e.numWorkers; i++ {
-		go e.worker()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			e.worker()
+		}()
 	}
 
-	// 发送任务
 	for idx, task := range tasks {
-		e.TaskChan <- ExecuteTask[T]{ID: idx, Task: task}
+		e.TaskChan <- Payload[T]{ID: idx, Value: task}
 	}
 	close(e.TaskChan)
+
+	wg.Wait()
+	close(e.SuccChan)
+	close(e.ErrChan)
 }
 
 func NewExecutor[T any, R any](processor func(T) (R, error), numWorkers int) *Executor[T, R] {
-	TaskChan := make(chan ExecuteTask[T], numWorkers)
-	resultChan := make(chan ExecuteResult[T, R], numWorkers)
-	errorChan := make(chan ExecuteError[T], numWorkers)
-
 	return &Executor[T, R]{
 		processor:  processor,
 		numWorkers: numWorkers,
-		TaskChan:   TaskChan,
-		ResultChan: resultChan,
-		ErrorChan:  errorChan,
+		TaskChan:   make(chan Payload[T], numWorkers),
+		SuccChan:   make(chan Payload[R], numWorkers),
+		ErrChan:    make(chan ExecuteError, numWorkers),
 	}
 }

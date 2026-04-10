@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/schollz/progressbar/v3"
+
 	"github.com/Mr-xiaotian/CelestialForge/pkg/flow"
 	"github.com/Mr-xiaotian/CelestialForge/pkg/str"
 	"github.com/Mr-xiaotian/CelestialForge/pkg/units"
@@ -32,16 +34,25 @@ func GetDuplicateFile(path string) (map[FileInfo][]string, error) {
 	}
 
 	// 利用hash来进行二次判断
+	origin := make(map[int]string, len(fileSizeDuplicates))
+	for i, path := range fileSizeDuplicates {
+		origin[i] = path
+	}
+
 	executor := flow.NewExecutor(GetFileSHA1, 3)
+	bar := progressbar.Default(int64(len(fileSizeDuplicates)), "Hashing files")
+	executor.OnProgress = func(completed, total int) {
+		bar.Set(completed)
+	}
 	go executor.Start(fileSizeDuplicates)
 
 	// 收集结果
 	fileHashMap := map[string][]string{}
 	for i := 0; i < len(fileSizeDuplicates); i++ {
 		select {
-		case res := <-executor.ResultChan:
-			fileHashMap[res.Result] = append(fileHashMap[res.Result], res.Task)
-		case err := <-executor.ErrorChan:
+		case res := <-executor.SuccChan:
+			fileHashMap[res.Value] = append(fileHashMap[res.Value], origin[res.ID])
+		case err := <-executor.ErrChan:
 			return nil, err.Error
 		}
 	}
