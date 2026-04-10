@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Mr-xiaotian/CelestialForge/pkg/number"
 	"github.com/Mr-xiaotian/CelestialForge/pkg/str"
+	"github.com/Mr-xiaotian/CelestialForge/pkg/units"
 )
 
 type flowResult struct {
@@ -41,7 +41,7 @@ func GetDuplicateFile(path string) (map[FileInfo][]string, error) {
 	}
 
 	// 这里根据文件的大小来初步判断是否可能是重复文件
-	fileSizeMap := make(map[int64][]string)
+	fileSizeMap := make(map[units.HumanBytes][]string)
 	for path, fileInfo := range fileInfoMap {
 		fileSizeMap[fileInfo.Size] = append(fileSizeMap[fileInfo.Size], path)
 	}
@@ -114,12 +114,12 @@ func DuplicateReport(identicalMap map[FileInfo][]string) string {
 		entries = append(entries, entry{info: info, paths: paths})
 	}
 	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].info.Size*int64(len(entries[i].paths)) >
-			entries[j].info.Size*int64(len(entries[j].paths))
+		return entries[i].info.Size*units.NewHumanBytes(int64(len(entries[i].paths))) >
+			entries[j].info.Size*units.NewHumanBytes(int64(len(entries[j].paths)))
 	})
 
 	var report []string
-	var totalSize int64
+	var totalSize units.HumanBytes
 	var totalItemNum int
 	var maxItemNum int
 	var maxItemEntry entry
@@ -128,7 +128,7 @@ func DuplicateReport(identicalMap map[FileInfo][]string) string {
 
 	for idx, e := range entries {
 		itemNum := len(e.paths)
-		itemsSize := e.info.Size * int64(itemNum)
+		itemsSize := e.info.Size * units.NewHumanBytes(int64(itemNum))
 		totalSize += itemsSize
 		totalItemNum += itemNum
 
@@ -139,18 +139,18 @@ func DuplicateReport(identicalMap map[FileInfo][]string) string {
 
 		data := make([][]string, len(e.paths))
 		for i, p := range e.paths {
-			data[i] = []string{p, number.HumanBytes(e.info.Size)}
+			data[i] = []string{p, e.info.Size.String()}
 		}
 		tableText := str.FormatTable(data, []string{"Item", "Size"})
 
-		report = append(report, fmt.Sprintf("%d.Hash: %s (Size: %s)", idx, e.info.Hash, number.HumanBytes(itemsSize)))
+		report = append(report, fmt.Sprintf("%d.Hash: %s (Size: %s)", idx, e.info.Hash, itemsSize.String()))
 		report = append(report, tableText)
 	}
 
-	report = append(report, fmt.Sprintf("Total size of duplicate items: %s", number.HumanBytes(totalSize)))
+	report = append(report, fmt.Sprintf("Total size of duplicate items: %s", totalSize.String()))
 	report = append(report, fmt.Sprintf("Total number of duplicate items: %d", totalItemNum))
 	report = append(report, fmt.Sprintf("Item with the most duplicates: %s(hash) %s(size) %d(number)",
-		maxItemEntry.info.Hash, number.HumanBytes(maxItemEntry.info.Size), maxItemNum))
+		maxItemEntry.info.Hash, maxItemEntry.info.Size.String(), maxItemNum))
 
 	return strings.Join(report, "\n")
 }

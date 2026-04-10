@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Mr-xiaotian/CelestialForge/pkg/file"
+	"github.com/Mr-xiaotian/CelestialForge/pkg/units"
 )
 
 func debug_info() {
@@ -19,7 +20,21 @@ func debug_duplicate() {
 	fmt.Println(identicalReport)
 }
 
+func debug_bytes() {
+	a := units.HumanBytes(1500 * 1024 * 1024) // 1.5 GB
+	b := 500 * units.HumanBytes(1024)         // 500 MB
+
+	sum := a.Add(b)
+	fmt.Printf("a = %s\n", a)     // 1.50 GB
+	fmt.Printf("b = %s\n", b)     // 500.00 MB
+	fmt.Printf("sum = %s\n", sum) // 1.95 GB
+
+	// 原始值
+	fmt.Printf("bytes = %d\n", sum.Int64()) // 2097152000
+}
+
 func main() {
 	// debug_info()
 	debug_duplicate()
+	// debug_bytes()
 }

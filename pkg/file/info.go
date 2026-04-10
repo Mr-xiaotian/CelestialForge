@@ -3,6 +3,8 @@ package file
 import (
 	"io/fs"
 	"path/filepath"
+
+	"github.com/Mr-xiaotian/CelestialForge/pkg/units"
 )
 
 // GetFilesInfoRecursive 递归获取所有文件
@@ -16,7 +18,7 @@ func GetFilesInfoRecursive(root string) (FileInfoMap, error) {
 		if !d.IsDir() {
 			info, _ := d.Info()
 			files[path] = FileInfo{
-				Size:  info.Size(),
+				Size:  units.NewHumanBytes(info.Size()),
 				Mtime: info.ModTime(),
 			} // 完整路径
 		}

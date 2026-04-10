@@ -1,10 +1,14 @@
 package file
 
-import "time"
+import (
+	"time"
+
+	"github.com/Mr-xiaotian/CelestialForge/pkg/units"
+)
 
 type FileInfo struct {
 	Path  string
-	Size  int64
+	Size  units.HumanBytes
 	Mtime time.Time
 	Hash  string
 }
