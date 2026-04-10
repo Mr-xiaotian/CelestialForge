@@ -12,6 +12,30 @@ import (
 	"github.com/Mr-xiaotian/CelestialForge/pkg/units"
 )
 
+type DuplicateExecutor struct {
+	*flow.Executor[string, string]
+}
+
+func NewDuplicateExecutor(processor func(string) (string, error), numWorkers int) *DuplicateExecutor {
+	return &DuplicateExecutor{
+		Executor: flow.NewExecutor(processor, numWorkers),
+	}
+}
+
+func (e *DuplicateExecutor) processResultChan(origin map[int]string) (map[string][]string, error) {
+	fileHashMap := map[string][]string{}
+	for i := 0; i < len(origin); i++ {
+		select {
+		case res := <-e.SuccChan:
+			fileHashMap[res.Value] = append(fileHashMap[res.Value], origin[res.ID])
+		case err := <-e.ErrChan:
+			return nil, err.Error
+		}
+	}
+
+	return fileHashMap, nil
+}
+
 func GetDuplicateFile(path string) (map[FileInfo][]string, error) {
 	fileInfoMap, err := GetFilesInfoRecursive(path)
 	if err != nil {
@@ -25,8 +49,8 @@ func GetDuplicateFile(path string) (map[FileInfo][]string, error) {
 	}
 
 	var fileSizeDuplicates []string
-	for _, paths := range fileSizeMap {
-		if len(paths) > 1 {
+	for size, paths := range fileSizeMap {
+		if len(paths) > 1 && size > 0 {
 			for _, path := range paths {
 				fileSizeDuplicates = append(fileSizeDuplicates, path)
 			}
@@ -39,7 +63,8 @@ func GetDuplicateFile(path string) (map[FileInfo][]string, error) {
 		origin[i] = path
 	}
 
-	executor := flow.NewExecutor(GetFileSHA1, 3)
+	// 并行计算文件hash
+	executor := NewDuplicateExecutor(GetFileSHA1, 3)
 	bar := progressbar.Default(int64(len(fileSizeDuplicates)), "Hashing files")
 	executor.OnProgress = func(completed, total int) {
 		bar.Set(completed)
@@ -47,15 +72,11 @@ func GetDuplicateFile(path string) (map[FileInfo][]string, error) {
 	go executor.Start(fileSizeDuplicates)
 
 	// 收集结果
-	fileHashMap := map[string][]string{}
-	for i := 0; i < len(fileSizeDuplicates); i++ {
-		select {
-		case res := <-executor.SuccChan:
-			fileHashMap[res.Value] = append(fileHashMap[res.Value], origin[res.ID])
-		case err := <-executor.ErrChan:
-			return nil, err.Error
-		}
+	fileHashMap, err := executor.processResultChan(origin)
+	if err != nil {
+		return nil, err
 	}
+	bar.Finish()
 
 	fileHashDuplicates := map[FileInfo][]string{}
 	for hash, paths := range fileHashMap {
