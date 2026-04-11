@@ -5,41 +5,48 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/schollz/progressbar/v3"
-
-	"github.com/Mr-xiaotian/CelestialForge/pkg/flow"
+	"github.com/Mr-xiaotian/CelestialForge/pkg/grow"
 	"github.com/Mr-xiaotian/CelestialForge/pkg/str"
 	"github.com/Mr-xiaotian/CelestialForge/pkg/units"
 )
 
 // executor
 type SnapshotExecutor struct {
-	*flow.Executor[string, string]
+	*grow.Executor[string, string]
 }
 type HashExecutor struct {
-	*flow.Executor[string, string]
+	*grow.Executor[string, string]
 }
 
-func NewSnapshotExecutor(processor func(string) (string, error), numWorkers int) *SnapshotExecutor {
-	return &SnapshotExecutor{
-		Executor: flow.NewExecutor(processor, numWorkers),
+func NewSnapshotExecutor(processor func(string) (string, error), numWorkers int, observers ...grow.Observer) *SnapshotExecutor {
+	executor := &SnapshotExecutor{
+		Executor: grow.NewExecutor(processor, numWorkers, observers...),
 	}
+	return executor
 }
-func NewHashExecutor(processor func(string) (string, error), numWorkers int) *HashExecutor {
-	return &HashExecutor{
-		Executor: flow.NewExecutor(processor, numWorkers),
+func NewHashExecutor(processor func(string) (string, error), numWorkers int, observers ...grow.Observer) *HashExecutor {
+	executor := &HashExecutor{
+		Executor: grow.NewExecutor(processor, numWorkers, observers...),
 	}
+	return executor
 }
 
 func (e *SnapshotExecutor) processResultChan(origin map[int]string) ([]string, error) {
 	fileSnapshotMap := map[string][]string{}
+	var firstErr error
 	for i := 0; i < len(origin); i++ {
 		select {
 		case res := <-e.SuccChan:
 			fileSnapshotMap[res.Value] = append(fileSnapshotMap[res.Value], origin[res.ID])
 		case err := <-e.ErrChan:
-			return nil, err.Error
+			if firstErr == nil {
+				firstErr = err.Error
+			}
 		}
+	}
+
+	if firstErr != nil {
+		return nil, firstErr
 	}
 
 	var fileSnapshotDuplicates []string
@@ -54,13 +61,20 @@ func (e *SnapshotExecutor) processResultChan(origin map[int]string) ([]string, e
 }
 func (e *HashExecutor) processResultChan(origin map[int]string) (map[string][]string, error) {
 	fileHashMap := map[string][]string{}
+	var firstErr error
 	for i := 0; i < len(origin); i++ {
 		select {
 		case res := <-e.SuccChan:
 			fileHashMap[res.Value] = append(fileHashMap[res.Value], origin[res.ID])
 		case err := <-e.ErrChan:
-			return nil, err.Error
+			if firstErr == nil {
+				firstErr = err.Error
+			}
 		}
+	}
+
+	if firstErr != nil {
+		return nil, firstErr
 	}
 
 	return fileHashMap, nil
@@ -84,7 +98,7 @@ func getSizeDuplicate(fileInfoMap FileInfoMap) []string {
 	return fileSizeDuplicates
 }
 
-func getSnapshotDuplicate(fileSizeDuplicates []string, numWorkers int) []string {
+func getSnapshotDuplicate(fileSizeDuplicates []string, numWorkers int) ([]string, error) {
 	// 利用短hash(4KB)来进行二次判断
 	origin := make(map[int]string, len(fileSizeDuplicates))
 	for i, path := range fileSizeDuplicates {
@@ -92,23 +106,18 @@ func getSnapshotDuplicate(fileSizeDuplicates []string, numWorkers int) []string 
 	}
 
 	// 并行计算文件hash
-	executor := NewSnapshotExecutor(GetFileSnapshotSHA1, numWorkers)
-	bar := progressbar.Default(int64(len(fileSizeDuplicates)), "Snapshoting files")
-	executor.OnProgress = func(completed, total int) {
-		bar.Set(completed)
-	}
+	executor := NewSnapshotExecutor(GetFileSnapshotSHA1, numWorkers, grow.NewProgressBar("Snapshoting files"))
 	go executor.Start(fileSizeDuplicates)
 
 	// 收集结果
 	fileSnapshotDuplicates, err := executor.processResultChan(origin)
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	bar.Finish()
-	return fileSnapshotDuplicates
+	return fileSnapshotDuplicates, nil
 }
 
-func getHashDuplicate(fileSnapshotDuplicates []string, fileInfoMap FileInfoMap, numWorkers int) map[FileInfo][]string {
+func getHashDuplicate(fileSnapshotDuplicates []string, fileInfoMap FileInfoMap, numWorkers int) (map[FileInfo][]string, error) {
 	// 利用hash来进行三次判断
 	origin := make(map[int]string, len(fileSnapshotDuplicates))
 	for i, path := range fileSnapshotDuplicates {
@@ -116,19 +125,14 @@ func getHashDuplicate(fileSnapshotDuplicates []string, fileInfoMap FileInfoMap, 
 	}
 
 	// 并行计算文件hash
-	executor := NewHashExecutor(GetFileSHA1, numWorkers)
-	bar := progressbar.Default(int64(len(fileSnapshotDuplicates)), "Hashing files")
-	executor.OnProgress = func(completed, total int) {
-		bar.Set(completed)
-	}
+	executor := NewHashExecutor(GetFileSHA1, numWorkers, grow.NewProgressBar("Hashing files"))
 	go executor.Start(fileSnapshotDuplicates)
 
 	// 收集结果
 	fileHashMap, err := executor.processResultChan(origin)
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	bar.Finish()
 	fileHashDuplicates := map[FileInfo][]string{}
 	for hash, paths := range fileHashMap {
 		if len(paths) > 1 {
@@ -139,7 +143,7 @@ func getHashDuplicate(fileSnapshotDuplicates []string, fileInfoMap FileInfoMap, 
 			fileHashDuplicates[fileInfo] = paths
 		}
 	}
-	return fileHashDuplicates
+	return fileHashDuplicates, nil
 }
 
 func ScanDuplicateFile(path string, numWorkers int) (map[FileInfo][]string, error) {
@@ -151,10 +155,16 @@ func ScanDuplicateFile(path string, numWorkers int) (map[FileInfo][]string, erro
 	fileSizeDuplicates := getSizeDuplicate(fileInfoMap)
 
 	// 利用短hash(4KB)来进行二次判断
-	fileSnapshotDuplicates := getSnapshotDuplicate(fileSizeDuplicates, numWorkers)
+	fileSnapshotDuplicates, err := getSnapshotDuplicate(fileSizeDuplicates, numWorkers)
+	if err != nil {
+		return nil, err
+	}
 
 	// 利用hash来进行三次判断
-	fileHashDuplicates := getHashDuplicate(fileSnapshotDuplicates, fileInfoMap, numWorkers)
+	fileHashDuplicates, err := getHashDuplicate(fileSnapshotDuplicates, fileInfoMap, numWorkers)
+	if err != nil {
+		return nil, err
+	}
 
 	return fileHashDuplicates, nil
 }

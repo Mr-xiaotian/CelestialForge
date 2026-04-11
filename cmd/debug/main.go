@@ -15,7 +15,7 @@ func debug_info() {
 }
 
 func debug_duplicate() {
-	identicalMap, _ := file.ScanDuplicateFile(`Q:\Project\CelestialForge\tests\testdata\duplicate`, 4)
+	identicalMap, _ := file.ScanDuplicateFile(`D:\Project\CelestialForge`, 4)
 	identicalReport := file.DuplicateReport(identicalMap)
 	fmt.Println(identicalReport)
 }
@@ -65,9 +65,9 @@ func debug_hash() {
 
 func main() {
 	// debug_info()
-	// debug_duplicate()
+	debug_duplicate()
 	// debug_bytes()
 	// debug_size()
 	// debug_mtime()
-	debug_hash()
+	// debug_hash()
 }
