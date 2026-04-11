@@ -15,7 +15,7 @@ func debug_info() {
 }
 
 func debug_duplicate() {
-	identicalMap, _ := file.GetDuplicateFile(`Q:\Project\CelestialForge\tests\testdata\duplicate`)
+	identicalMap, _ := file.ScanDuplicateFile(`Q:\Project\CelestialForge\tests\testdata\duplicate`, 4)
 	identicalReport := file.DuplicateReport(identicalMap)
 	fmt.Println(identicalReport)
 }

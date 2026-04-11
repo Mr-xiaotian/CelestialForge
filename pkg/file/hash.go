@@ -40,8 +40,40 @@ func GetFileHash(path string, hashType HashType) (string, error) {
 		return "", fmt.Errorf("不支持的哈希类型: %s", hashType)
 	}
 
-	if _, err := io.Copy(h, file); err != nil {
+	buf := make([]byte, 1024*1024) // 1MB 缓冲区
+	if _, err := io.CopyBuffer(h, file, buf); err != nil {
 		return "", fmt.Errorf("计算哈希失败: %w", err)
+	}
+
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// GetFileSnapshotHash 获取文件快照哈希值
+func GetFileSnapshotHash(path string, hashType HashType) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", fmt.Errorf("open file failed: %w", err)
+	}
+	defer file.Close()
+
+	// 1. 确定哈希算法
+	var h hash.Hash
+	switch hashType {
+	case MD5:
+		h = md5.New()
+	case SHA1:
+		h = sha1.New()
+	case SHA256:
+		h = sha256.New()
+	default:
+		return "", fmt.Errorf("unsupported hash type: %s", hashType)
+	}
+
+	// 2. 限制读取量：最大只读取前 4KB
+	// io.LimitReader 会在达到 4096 字节或文件末尾时停止
+	const limit = 4096
+	if _, err := io.Copy(h, io.LimitReader(file, limit)); err != nil {
+		return "", fmt.Errorf("calculate snapshot hash failed: %w", err)
 	}
 
 	return hex.EncodeToString(h.Sum(nil)), nil
@@ -62,4 +94,19 @@ func GetFileSHA1(path string) (string, error) {
 // GetFileSHA256 获取文件 SHA256
 func GetFileSHA256(path string) (string, error) {
 	return GetFileHash(path, SHA256)
+}
+
+// GetFileSnapshotMD5 获取文件快照 MD5
+func GetFileSnapshotMD5(path string) (string, error) {
+	return GetFileSnapshotHash(path, MD5)
+}
+
+// GetFileSnapshotSHA1 获取文件快照 SHA1
+func GetFileSnapshotSHA1(path string) (string, error) {
+	return GetFileSnapshotHash(path, SHA1)
+}
+
+// GetFileSnapshotSHA256 获取文件快照 SHA256
+func GetFileSnapshotSHA256(path string) (string, error) {
+	return GetFileSnapshotHash(path, SHA256)
 }

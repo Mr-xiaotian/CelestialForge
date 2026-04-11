@@ -97,9 +97,9 @@ func TestGetFileSHA1(t *testing.T) {
 }
 
 func TestDuplicateReport(t *testing.T) {
-	duplicates, err := file.GetDuplicateFile(filepath.Join("testdata", "duplicate"))
+	duplicates, err := file.ScanDuplicateFile(filepath.Join("testdata", "duplicate"), 4)
 	if err != nil {
-		t.Fatalf("GetDuplicateFile 失败: %v", err)
+		t.Fatalf("ScanDuplicateFile 失败: %v", err)
 	}
 
 	report := file.DuplicateReport(duplicates)

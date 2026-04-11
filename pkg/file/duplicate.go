@@ -12,17 +12,47 @@ import (
 	"github.com/Mr-xiaotian/CelestialForge/pkg/units"
 )
 
-type DuplicateExecutor struct {
+// executor
+type SnapshotExecutor struct {
+	*flow.Executor[string, string]
+}
+type HashExecutor struct {
 	*flow.Executor[string, string]
 }
 
-func NewDuplicateExecutor(processor func(string) (string, error), numWorkers int) *DuplicateExecutor {
-	return &DuplicateExecutor{
+func NewSnapshotExecutor(processor func(string) (string, error), numWorkers int) *SnapshotExecutor {
+	return &SnapshotExecutor{
+		Executor: flow.NewExecutor(processor, numWorkers),
+	}
+}
+func NewHashExecutor(processor func(string) (string, error), numWorkers int) *HashExecutor {
+	return &HashExecutor{
 		Executor: flow.NewExecutor(processor, numWorkers),
 	}
 }
 
-func (e *DuplicateExecutor) processResultChan(origin map[int]string) (map[string][]string, error) {
+func (e *SnapshotExecutor) processResultChan(origin map[int]string) ([]string, error) {
+	fileSnapshotMap := map[string][]string{}
+	for i := 0; i < len(origin); i++ {
+		select {
+		case res := <-e.SuccChan:
+			fileSnapshotMap[res.Value] = append(fileSnapshotMap[res.Value], origin[res.ID])
+		case err := <-e.ErrChan:
+			return nil, err.Error
+		}
+	}
+
+	var fileSnapshotDuplicates []string
+	for _, paths := range fileSnapshotMap {
+		if len(paths) > 1 {
+			for _, path := range paths {
+				fileSnapshotDuplicates = append(fileSnapshotDuplicates, path)
+			}
+		}
+	}
+	return fileSnapshotDuplicates, nil
+}
+func (e *HashExecutor) processResultChan(origin map[int]string) (map[string][]string, error) {
 	fileHashMap := map[string][]string{}
 	for i := 0; i < len(origin); i++ {
 		select {
@@ -36,13 +66,8 @@ func (e *DuplicateExecutor) processResultChan(origin map[int]string) (map[string
 	return fileHashMap, nil
 }
 
-func GetDuplicateFile(path string) (map[FileInfo][]string, error) {
-	fileInfoMap, err := GetFilesInfoRecursive(path)
-	if err != nil {
-		return nil, err
-	}
-
-	// 这里根据文件的大小来初步判断是否可能是重复文件
+// func
+func getSizeDuplicate(fileInfoMap FileInfoMap) []string {
 	fileSizeMap := make(map[units.HumanBytes][]string)
 	for path, fileInfo := range fileInfoMap {
 		fileSizeMap[fileInfo.Size] = append(fileSizeMap[fileInfo.Size], path)
@@ -56,28 +81,54 @@ func GetDuplicateFile(path string) (map[FileInfo][]string, error) {
 			}
 		}
 	}
+	return fileSizeDuplicates
+}
 
-	// 利用hash来进行二次判断
+func getSnapshotDuplicate(fileSizeDuplicates []string, numWorkers int) []string {
+	// 利用短hash(4KB)来进行二次判断
 	origin := make(map[int]string, len(fileSizeDuplicates))
 	for i, path := range fileSizeDuplicates {
 		origin[i] = path
 	}
 
 	// 并行计算文件hash
-	executor := NewDuplicateExecutor(GetFileSHA1, 3)
-	bar := progressbar.Default(int64(len(fileSizeDuplicates)), "Hashing files")
+	executor := NewSnapshotExecutor(GetFileSnapshotSHA1, numWorkers)
+	bar := progressbar.Default(int64(len(fileSizeDuplicates)), "Snapshoting files")
 	executor.OnProgress = func(completed, total int) {
 		bar.Set(completed)
 	}
 	go executor.Start(fileSizeDuplicates)
 
 	// 收集结果
-	fileHashMap, err := executor.processResultChan(origin)
+	fileSnapshotDuplicates, err := executor.processResultChan(origin)
 	if err != nil {
-		return nil, err
+		return nil
 	}
 	bar.Finish()
+	return fileSnapshotDuplicates
+}
 
+func getHashDuplicate(fileSnapshotDuplicates []string, fileInfoMap FileInfoMap, numWorkers int) map[FileInfo][]string {
+	// 利用hash来进行三次判断
+	origin := make(map[int]string, len(fileSnapshotDuplicates))
+	for i, path := range fileSnapshotDuplicates {
+		origin[i] = path
+	}
+
+	// 并行计算文件hash
+	executor := NewHashExecutor(GetFileSHA1, numWorkers)
+	bar := progressbar.Default(int64(len(fileSnapshotDuplicates)), "Hashing files")
+	executor.OnProgress = func(completed, total int) {
+		bar.Set(completed)
+	}
+	go executor.Start(fileSnapshotDuplicates)
+
+	// 收集结果
+	fileHashMap, err := executor.processResultChan(origin)
+	if err != nil {
+		return nil
+	}
+	bar.Finish()
 	fileHashDuplicates := map[FileInfo][]string{}
 	for hash, paths := range fileHashMap {
 		if len(paths) > 1 {
@@ -88,6 +139,22 @@ func GetDuplicateFile(path string) (map[FileInfo][]string, error) {
 			fileHashDuplicates[fileInfo] = paths
 		}
 	}
+	return fileHashDuplicates
+}
+
+func ScanDuplicateFile(path string, numWorkers int) (map[FileInfo][]string, error) {
+	fileInfoMap, err := GetFilesInfoRecursive(path)
+	if err != nil {
+		return nil, err
+	}
+	// 这里根据文件的大小来初步判断是否可能是重复文件
+	fileSizeDuplicates := getSizeDuplicate(fileInfoMap)
+
+	// 利用短hash(4KB)来进行二次判断
+	fileSnapshotDuplicates := getSnapshotDuplicate(fileSizeDuplicates, numWorkers)
+
+	// 利用hash来进行三次判断
+	fileHashDuplicates := getHashDuplicate(fileSnapshotDuplicates, fileInfoMap, numWorkers)
 
 	return fileHashDuplicates, nil
 }

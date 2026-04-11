@@ -2,19 +2,30 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 
 	"github.com/Mr-xiaotian/CelestialForge/pkg/file"
 )
 
 func main() {
-	path := flag.String("path", "", "path to scan")
-	output := flag.String("output", "duplicate_report.txt", "output file path")
+	scanPath := flag.String("scan-path", "", "path to scan")
+	outputPath := flag.String("output-path", "duplicate_report.txt", "output file path")
+	numWorkers := flag.Int("num-workers", 4, "number of workers to use")
 	flag.Parse()
 
-	identicalMap, _ := file.GetDuplicateFile(*path)
-	identicalReport := file.DuplicateReport(identicalMap)
-	// fmt.Println(identicalReport)
+	var err error
 
-	os.WriteFile(*output, []byte(identicalReport), 0644)
+	identicalMap, err := file.ScanDuplicateFile(*scanPath, *numWorkers)
+	if err != nil {
+		fmt.Println("Error scanning duplicate files:", err)
+		return
+	}
+	identicalReport := file.DuplicateReport(identicalMap)
+
+	err = os.WriteFile(*outputPath, []byte(identicalReport), 0644)
+	if err != nil {
+		fmt.Println("Error writing output file:", err)
+		return
+	}
 }
