@@ -30,7 +30,7 @@ func TestGetFileSize(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("GetFileSize(%q) error = %v, wantErr %v", tt.path, err, tt.wantErr)
 			}
-			if !tt.wantErr && size != tt.wantSize {
+			if !tt.wantErr && int64(size) != tt.wantSize {
 				t.Errorf("GetFileSize(%q) = %d, want %d", tt.path, size, tt.wantSize)
 			}
 		})

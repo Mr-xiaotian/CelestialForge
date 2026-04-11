@@ -1,7 +1,9 @@
 package file
 
 import (
+	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 
 	"github.com/Mr-xiaotian/CelestialForge/pkg/units"
@@ -9,8 +11,12 @@ import (
 
 // GetFilesInfoRecursive 递归获取所有文件
 func GetFilesInfoRecursive(root string) (FileInfoMap, error) {
-	files := make(FileInfoMap)
+	if _, err := os.Stat(root); err != nil && !os.IsExist(err) {
+		// 处理不存在的情况
+		return nil, fmt.Errorf("目录不存在: %w", err)
+	}
 
+	files := make(FileInfoMap)
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err // 跳过无法访问的文件

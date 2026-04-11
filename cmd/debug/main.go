@@ -51,10 +51,23 @@ func debug_mtime() {
 	fmt.Printf("dirMtime = %s\n", dirMtime)
 }
 
+func debug_hash() {
+	filePath := `D:\Project\CelestialForge\temp\duplicate.txt`
+	md5, err := file.GetFileMD5(filePath)
+	snapshotMD5, err := file.GetFileSnapshotMD5(filePath)
+	if err != nil {
+		fmt.Printf("GetFileMD5 error: %v\n", err)
+		return
+	}
+	fmt.Printf("md5 = %s\n", md5)
+	fmt.Printf("snapshotMD5 = %s\n", snapshotMD5)
+}
+
 func main() {
 	// debug_info()
 	// debug_duplicate()
 	// debug_bytes()
 	// debug_size()
-	debug_mtime()
+	// debug_mtime()
+	debug_hash()
 }
