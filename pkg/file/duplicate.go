@@ -31,55 +31,6 @@ func NewHashExecutor(processor func(string) (string, error), numWorkers int, obs
 	return executor
 }
 
-func (e *SnapshotExecutor) processResultChan(origin map[int]string) ([]string, error) {
-	fileSnapshotMap := map[string][]string{}
-	var firstErr error
-	for i := 0; i < len(origin); i++ {
-		select {
-		case res := <-e.SuccChan:
-			fileSnapshotMap[res.Value] = append(fileSnapshotMap[res.Value], origin[res.ID])
-		case err := <-e.ErrChan:
-			if firstErr == nil {
-				firstErr = err.Error
-			}
-		}
-	}
-
-	if firstErr != nil {
-		return nil, firstErr
-	}
-
-	var fileSnapshotDuplicates []string
-	for _, paths := range fileSnapshotMap {
-		if len(paths) > 1 {
-			for _, path := range paths {
-				fileSnapshotDuplicates = append(fileSnapshotDuplicates, path)
-			}
-		}
-	}
-	return fileSnapshotDuplicates, nil
-}
-func (e *HashExecutor) processResultChan(origin map[int]string) (map[string][]string, error) {
-	fileHashMap := map[string][]string{}
-	var firstErr error
-	for i := 0; i < len(origin); i++ {
-		select {
-		case res := <-e.SuccChan:
-			fileHashMap[res.Value] = append(fileHashMap[res.Value], origin[res.ID])
-		case err := <-e.ErrChan:
-			if firstErr == nil {
-				firstErr = err.Error
-			}
-		}
-	}
-
-	if firstErr != nil {
-		return nil, firstErr
-	}
-
-	return fileHashMap, nil
-}
-
 // func
 func getSizeDuplicate(fileInfoMap FileInfoMap) []string {
 	fileSizeMap := make(map[units.HumanBytes][]string)
@@ -110,9 +61,18 @@ func getSnapshotDuplicate(fileSizeDuplicates []string, numWorkers int) ([]string
 	go executor.Start(fileSizeDuplicates)
 
 	// 收集结果
-	fileSnapshotDuplicates, err := executor.processResultChan(origin)
-	if err != nil {
-		return nil, err
+	fileSnapshotMap := map[string][]string{}
+	executor.Drain(len(origin), func(res grow.Payload[string]) {
+		fileSnapshotMap[res.Value] = append(fileSnapshotMap[res.Value], origin[res.ID])
+	}, nil)
+
+	var fileSnapshotDuplicates []string
+	for _, paths := range fileSnapshotMap {
+		if len(paths) > 1 {
+			for _, path := range paths {
+				fileSnapshotDuplicates = append(fileSnapshotDuplicates, path)
+			}
+		}
 	}
 	return fileSnapshotDuplicates, nil
 }
@@ -129,10 +89,10 @@ func getHashDuplicate(fileSnapshotDuplicates []string, fileInfoMap FileInfoMap, 
 	go executor.Start(fileSnapshotDuplicates)
 
 	// 收集结果
-	fileHashMap, err := executor.processResultChan(origin)
-	if err != nil {
-		return nil, err
-	}
+	fileHashMap := map[string][]string{}
+	executor.Drain(len(origin), func(res grow.Payload[string]) {
+		fileHashMap[res.Value] = append(fileHashMap[res.Value], origin[res.ID])
+	}, nil)
 	fileHashDuplicates := map[FileInfo][]string{}
 	for hash, paths := range fileHashMap {
 		if len(paths) > 1 {

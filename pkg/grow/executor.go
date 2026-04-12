@@ -13,6 +13,7 @@ type Executor[T any, R any] struct {
 	Counter
 }
 
+// reportProgress 报告进度
 func (e *Executor[T, R]) reportProgress() {
 	completed := e.GetComplated()
 	total := e.GetTotal()
@@ -21,6 +22,7 @@ func (e *Executor[T, R]) reportProgress() {
 	}
 }
 
+// notifyStart 通知开始
 func (e *Executor[T, R]) notifyStart() {
 	total := e.GetTotal()
 	for _, observer := range e.observers {
@@ -28,6 +30,7 @@ func (e *Executor[T, R]) notifyStart() {
 	}
 }
 
+// notifyFinish 通知完成
 func (e *Executor[T, R]) notifyFinish() {
 	completed := e.GetComplated()
 	total := e.GetTotal()
@@ -36,18 +39,43 @@ func (e *Executor[T, R]) notifyFinish() {
 	}
 }
 
+// processTaskSuccess 处理成功任务
 func (e *Executor[T, R]) processTaskSuccess(taskPayload Payload[T], result R) {
 	e.AddSuccess(1)
 	e.reportProgress()
 	e.SuccChan <- Payload[R]{ID: taskPayload.ID, Value: result}
 }
 
+// handleTaskError 处理错误任务
 func (e *Executor[T, R]) handleTaskError(taskPayload Payload[T], err error) {
 	e.AddFailed(1)
 	e.reportProgress()
 	e.ErrChan <- ExecuteError{ID: taskPayload.ID, Error: err}
 }
 
+// Drain 消费指定数量的成功/错误结果，确保结果通道被完整读取
+func (e *Executor[T, R]) Drain(expected int, onSuccess func(Payload[R]), onError func(ExecuteError)) {
+	succChan := e.SuccChan
+	errChan := e.ErrChan
+	received := 0
+
+	for received < expected {
+		select {
+		case res, _ := <-succChan:
+			received++
+			if onSuccess != nil {
+				onSuccess(res)
+			}
+		case execErr, _ := <-errChan:
+			received++
+			if onError != nil {
+				onError(execErr)
+			}
+		}
+	}
+}
+
+// inputTask 输入任务
 func (e *Executor[T, R]) inputTask(tasks []T) {
 	for idx, task := range tasks {
 		e.TaskChan <- Payload[T]{ID: idx, Value: task}
@@ -55,6 +83,7 @@ func (e *Executor[T, R]) inputTask(tasks []T) {
 	e.ControlChan <- ControlSignal{Source: "executor"}
 }
 
+// worker 工作线
 func (e *Executor[T, R]) worker(task Payload[T], sem chan struct{}, done chan struct{}) {
 	defer func() {
 		<-sem // 释放并发令牌
@@ -68,6 +97,7 @@ func (e *Executor[T, R]) worker(task Payload[T], sem chan struct{}, done chan st
 	}
 }
 
+// runner 运行器
 func (e *Executor[T, R]) runner() {
 	sem := make(chan struct{}, e.numWorkers)  // 控制并发数
 	done := make(chan struct{}, e.numWorkers) // 控制worker完成信号
@@ -98,6 +128,7 @@ func (e *Executor[T, R]) runner() {
 	}
 }
 
+// Start 启动执行器
 func (e *Executor[T, R]) Start(tasks []T) {
 	e.SetTotal(len(tasks))
 	e.notifyStart()
@@ -110,6 +141,7 @@ func (e *Executor[T, R]) Start(tasks []T) {
 	close(e.ErrChan)
 }
 
+// NewExecutor 创建执行器
 func NewExecutor[T any, R any](processor func(T) (R, error), numWorkers int, observers ...Observer) *Executor[T, R] {
 	return &Executor[T, R]{
 		processor:  processor,
