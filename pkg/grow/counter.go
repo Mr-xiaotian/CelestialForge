@@ -12,6 +12,10 @@ func NewCounter() *Counter {
 	return &Counter{}
 }
 
+func (c *Counter) SetTotal(total int) {
+	c.total = total
+}
+
 func (c *Counter) AddSuccess(addNNum int) {
 	c.success.Add(int64(addNNum))
 }
@@ -26,4 +30,8 @@ func (c *Counter) GetTotal() int {
 
 func (c *Counter) GetComplated() int {
 	return int(c.success.Load() + c.failed.Load())
+}
+
+func (c *Counter) IsFinish() bool {
+	return c.GetComplated() == c.GetTotal()
 }
