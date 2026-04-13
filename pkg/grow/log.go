@@ -1,10 +1,11 @@
 package grow
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"time"
+
+	"github.com/Mr-xiaotian/CelestialForge/pkg/pipline"
 )
 
 var levelOrder = map[string]int{
@@ -67,39 +68,19 @@ func (h *LogRecordHandler) AfterStop() error {
 
 // LogSource 日志生产端，内嵌 Source 并提供级别过滤和领域方法
 type LogSource struct {
-	ch       chan<- LogRecord
-	ctx      context.Context
-	cancel   context.CancelFunc
-	timeout  time.Duration
+	pipline.Source[LogRecord]
 	minLevel int
 }
 
 func NewLogSource(ch chan<- LogRecord, timeout time.Duration, level string) *LogSource {
-	ctx, cancel := context.WithCancel(context.Background())
 	minLevel, ok := levelOrder[level]
 	if !ok {
 		minLevel = levelOrder["INFO"]
 	}
 	return &LogSource{
-		ch: ch, ctx: ctx, cancel: cancel, timeout: timeout, minLevel: minLevel,
+		Source:   *pipline.NewSource(ch, timeout),
+		minLevel: minLevel,
 	}
-}
-
-// Send 发送记录，支持上下文取消和超时控制
-func (s *LogSource) Send(record LogRecord) error {
-	select {
-	case s.ch <- record:
-		return nil
-	case <-s.ctx.Done():
-		return s.ctx.Err()
-	case <-time.After(s.timeout):
-		return fmt.Errorf("source send timeout after %v", s.timeout)
-	}
-}
-
-// Close 关闭 Source，后续 Send 调用将返回错误
-func (s *LogSource) Close() {
-	s.cancel()
 }
 
 func (l *LogSource) log(level string, message string) {
