@@ -152,6 +152,7 @@ func (e *Executor[T, R]) runner() {
 func (e *Executor[T, R]) Start(tasks []T) {
 	e.logSink.Start()
 	e.logSource.StartExecutor(e.Name, len(tasks))
+	startTime := time.Now()
 
 	e.SetTotal(len(tasks))
 	e.notifyStart()
@@ -163,7 +164,7 @@ func (e *Executor[T, R]) Start(tasks []T) {
 	close(e.SuccChan)
 	close(e.ErrChan)
 
-	e.logSource.EndExecutor(e.Name, 0, int(e.success.Load()), int(e.failed.Load()))
+	e.logSource.EndExecutor(e.Name, time.Since(startTime).Seconds(), int(e.success.Load()), int(e.failed.Load()))
 	e.logSink.Stop()
 }
 
