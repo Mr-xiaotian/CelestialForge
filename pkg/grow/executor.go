@@ -1,6 +1,14 @@
 package grow
 
+import (
+	"fmt"
+	"time"
+
+	"github.com/Mr-xiaotian/CelestialForge/pkg/pipline"
+)
+
 type Executor[T any, R any] struct {
+	Name       string
 	processor  func(T) (R, error)
 	numWorkers int
 
@@ -10,6 +18,8 @@ type Executor[T any, R any] struct {
 	ControlChan chan ControlSignal
 
 	observers []Observer
+	logSink   *pipline.Sink[LogRecord]
+	logSource *LogSource
 	Counter
 }
 
@@ -40,9 +50,15 @@ func (e *Executor[T, R]) notifyFinish() {
 }
 
 // processTaskSuccess 处理成功任务
-func (e *Executor[T, R]) processTaskSuccess(taskPayload Payload[T], result R) {
+func (e *Executor[T, R]) processTaskSuccess(taskPayload Payload[T], result R, startTime time.Time) {
 	e.AddSuccess(1)
 	e.reportProgress()
+
+	taskRepr := trunc(fmt.Sprintf("%+v", taskPayload.Value), 50)
+	resultRepr := trunc(fmt.Sprintf("%+v", result), 25)
+	useTime := time.Since(startTime).Seconds()
+	e.logSource.TaskSuccess(e.Name, taskRepr, resultRepr, useTime)
+
 	e.SuccChan <- Payload[R]{ID: taskPayload.ID, Value: result}
 }
 
@@ -50,6 +66,10 @@ func (e *Executor[T, R]) processTaskSuccess(taskPayload Payload[T], result R) {
 func (e *Executor[T, R]) handleTaskError(taskPayload Payload[T], err error) {
 	e.AddFailed(1)
 	e.reportProgress()
+
+	taskRepr := trunc(fmt.Sprintf("%+v", taskPayload.Value), 50)
+	e.logSource.TaskError(e.Name, taskRepr, err)
+
 	e.ErrChan <- ExecuteError{ID: taskPayload.ID, Error: err}
 }
 
@@ -84,16 +104,18 @@ func (e *Executor[T, R]) inputTask(tasks []T) {
 }
 
 // worker 工作线
-func (e *Executor[T, R]) worker(task Payload[T], sem chan struct{}, done chan struct{}) {
+func (e *Executor[T, R]) worker(taskPayload Payload[T], sem chan struct{}, done chan struct{}) {
 	defer func() {
-		<-sem // 释放并发令牌
-		done <- struct{}{}
+		<-sem              // 释放并发令牌
+		done <- struct{}{} // 发送完成信号
 	}()
-	result, err := e.processor(task.Value)
+
+	startTime := time.Now()
+	result, err := e.processor(taskPayload.Value)
 	if err != nil {
-		e.handleTaskError(task, err)
+		e.handleTaskError(taskPayload, err)
 	} else {
-		e.processTaskSuccess(task, result)
+		e.processTaskSuccess(taskPayload, result, startTime)
 	}
 }
 
@@ -119,9 +141,7 @@ func (e *Executor[T, R]) runner() {
 			inFlight++
 			go e.worker(task, sem, done)
 		case <-done: // worker完成信号
-			if inFlight > 0 {
-				inFlight--
-			}
+			inFlight--
 		case <-e.ControlChan:
 			inputClosed = true
 		}
@@ -130,6 +150,9 @@ func (e *Executor[T, R]) runner() {
 
 // Start 启动执行器
 func (e *Executor[T, R]) Start(tasks []T) {
+	e.logSink.Start()
+	e.logSource.StartExecutor(e.Name, len(tasks))
+
 	e.SetTotal(len(tasks))
 	e.notifyStart()
 
@@ -139,11 +162,18 @@ func (e *Executor[T, R]) Start(tasks []T) {
 	e.notifyFinish()
 	close(e.SuccChan)
 	close(e.ErrChan)
+
+	e.logSource.EndExecutor(e.Name, 0, int(e.success.Load()), int(e.failed.Load()))
+	e.logSink.Stop()
 }
 
 // NewExecutor 创建执行器
-func NewExecutor[T any, R any](processor func(T) (R, error), numWorkers int, observers ...Observer) *Executor[T, R] {
+func NewExecutor[T any, R any](name string, processor func(T) (R, error), numWorkers int, observers ...Observer) *Executor[T, R] {
+	logSink := pipline.NewSink(&LogRecordHandler{}, 100, time.Second)
+	logSource := NewLogSource(logSink.GetQueue(), time.Second, "INFO")
+
 	return &Executor[T, R]{
+		Name:       name,
 		processor:  processor,
 		numWorkers: numWorkers,
 
@@ -153,5 +183,7 @@ func NewExecutor[T any, R any](processor func(T) (R, error), numWorkers int, obs
 		ControlChan: make(chan ControlSignal, numWorkers),
 
 		observers: observers,
+		logSink:   logSink,
+		logSource: logSource,
 	}
 }

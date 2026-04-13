@@ -20,13 +20,13 @@ type HashExecutor struct {
 
 func NewSnapshotExecutor(processor func(string) (string, error), numWorkers int, observers ...grow.Observer) *SnapshotExecutor {
 	executor := &SnapshotExecutor{
-		Executor: grow.NewExecutor(processor, numWorkers, observers...),
+		Executor: grow.NewExecutor("SnapshotExecutor", processor, numWorkers, observers...),
 	}
 	return executor
 }
 func NewHashExecutor(processor func(string) (string, error), numWorkers int, observers ...grow.Observer) *HashExecutor {
 	executor := &HashExecutor{
-		Executor: grow.NewExecutor(processor, numWorkers, observers...),
+		Executor: grow.NewExecutor("HashExecutor", processor, numWorkers, observers...),
 	}
 	return executor
 }
