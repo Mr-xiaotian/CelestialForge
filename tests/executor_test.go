@@ -16,10 +16,10 @@ func TestExecutor_AllError(t *testing.T) {
 	executor := grow.NewExecutor("test_all_error", processor, 2)
 	tasks := []int{1, 2, 3, 4, 5}
 
-	go executor.Start(tasks)
-	executor.Drain(func(res grow.Payload[string]) {
+	results := executor.Start(tasks)
+	for _, res := range results {
 		t.Errorf("unexpected success: %v", res)
-	})
+	}
 
 	if executor.GetComplated() != len(tasks) {
 		t.Errorf("expected %d completed, got %d", len(tasks), executor.GetComplated())
@@ -41,12 +41,14 @@ func TestExecutor_PartialError(t *testing.T) {
 	executor := grow.NewExecutor("test_partial_error", processor, 2)
 	tasks := []int{1, 2, 3, 4, 5}
 
-	go executor.Start(tasks)
-
+	results := executor.Start(tasks)
 	successCount := 0
-	executor.Drain(func(res grow.Payload[int]) {
+	for _, res := range results {
+		if res.Result != res.Task*10 {
+			t.Fatalf("result %d does not match source %d", res.Result, res.Task)
+		}
 		successCount++
-	})
+	}
 
 	if successCount != 3 {
 		t.Errorf("expected 3 successes, got %d", successCount)
@@ -65,16 +67,18 @@ func TestExecutor_AllSuccess(t *testing.T) {
 	executor := grow.NewExecutor("test_all_success", processor, 3)
 	tasks := []int{1, 2, 3, 4, 5}
 
-	go executor.Start(tasks)
-
+	collects := executor.Start(tasks)
 	results := map[int]int{}
-	executor.Drain(func(res grow.Payload[int]) {
-		results[res.ID] = res.Value
-	})
+	for _, res := range collects {
+		results[res.Task] = res.Result
+		if res.Result != res.Task*2 {
+			t.Fatalf("result %d does not match source %d", res.Result, res.Task)
+		}
+	}
 
-	for i, task := range tasks {
-		if results[i] != task*2 {
-			t.Errorf("task %d: expected %d, got %d", i, task*2, results[i])
+	for _, task := range tasks {
+		if results[task] != task*2 {
+			t.Errorf("task %d: expected %d, got %d", task, task*2, results[task])
 		}
 	}
 	if int(executor.State()) != 2 {

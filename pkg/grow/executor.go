@@ -91,7 +91,7 @@ func (e *Executor[T, R]) processTaskSuccess(taskPayload Payload[T], result R, st
 	useTime := time.Since(startTime).Seconds()
 	e.logInlet.TaskSuccess(e.Name, taskRepr, resultRepr, useTime)
 
-	e.ResultChan <- Payload[R]{ID: taskPayload.ID, Value: result}
+	e.ResultChan <- Payload[R]{ID: taskPayload.ID, Value: result, Prev: taskPayload.Value}
 }
 
 // handleTaskError 处理错误任务
@@ -113,8 +113,8 @@ func (e *Executor[T, R]) Drain(onSuccess func(Payload[R])) {
 	}
 }
 
-// inputTask 输入任务
-func (e *Executor[T, R]) inputTask(tasks []T) {
+// seed 输入任务
+func (e *Executor[T, R]) seed(tasks []T) {
 	for idx, task := range tasks {
 		e.TaskChan <- Payload[T]{ID: idx, Value: task}
 	}
@@ -124,6 +124,9 @@ func (e *Executor[T, R]) inputTask(tasks []T) {
 // worker 工作线
 func (e *Executor[T, R]) worker(taskPayload Payload[T], sem chan struct{}, done chan struct{}) {
 	defer func() {
+		if r := recover(); r != nil {
+			e.handleTaskError(taskPayload, fmt.Errorf("processor panic: %v", r))
+		}
 		<-sem              // 释放并发令牌
 		done <- struct{}{} // 发送完成信号
 	}()
@@ -137,8 +140,8 @@ func (e *Executor[T, R]) worker(taskPayload Payload[T], sem chan struct{}, done 
 	}
 }
 
-// runner 运行器
-func (e *Executor[T, R]) runner() {
+// dispatch 调度器
+func (e *Executor[T, R]) dispatch() {
 	sem := make(chan struct{}, e.numWorkers)  // 控制并发数
 	done := make(chan struct{}, e.numWorkers) // 控制worker完成信号
 
@@ -150,6 +153,7 @@ func (e *Executor[T, R]) runner() {
 
 	for {
 		if shouldFinish() {
+			close(e.ResultChan)
 			return
 		}
 
@@ -166,8 +170,20 @@ func (e *Executor[T, R]) runner() {
 	}
 }
 
+// collect 收集所有成功结果，并保留对应的任务信息
+func (e *Executor[T, R]) collect() []TaskResult[T, R] {
+	results := make([]TaskResult[T, R], 0)
+	for res := range e.ResultChan {
+		results = append(results, TaskResult[T, R]{
+			Task:   res.Prev.(T),
+			Result: res.Value,
+		})
+	}
+	return results
+}
+
 // Start 启动执行器
-func (e *Executor[T, R]) Start(tasks []T) {
+func (e *Executor[T, R]) Start(tasks []T) []TaskResult[T, R] {
 	e.logSpout.Start()
 	e.failSpout.Start()
 	e.logInlet.StartExecutor(e.Name, len(tasks))
@@ -177,14 +193,15 @@ func (e *Executor[T, R]) Start(tasks []T) {
 	e.SetTotal(len(tasks))
 	e.notifyStart()
 
-	go e.inputTask(tasks)
-	e.runner()
+	go e.seed(tasks)
+	go e.dispatch()
+	results := e.collect()
 
 	e.notifyFinish()
-	close(e.ResultChan)
 	e.state.Store(2)
 
 	e.logInlet.EndExecutor(e.Name, time.Since(startTime).Seconds(), int(e.success.Load()), int(e.failed.Load()))
 	e.logSpout.Stop()
 	e.failSpout.Stop()
+	return results
 }

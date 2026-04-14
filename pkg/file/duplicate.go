@@ -29,21 +29,15 @@ func getSizeDuplicate(fileInfoMap FileInfoMap) []string {
 }
 
 func getSnapshotDuplicate(fileSizeDuplicates []string, numWorkers int) ([]string, error) {
-	// 利用短hash(4KB)来进行二次判断
-	origin := make(map[int]string, len(fileSizeDuplicates))
-	for i, path := range fileSizeDuplicates {
-		origin[i] = path
-	}
-
 	// 并行计算文件hash
 	executor := grow.NewExecutor("SnapshotExecutor", GetFileSnapshotSHA1, numWorkers, grow.NewProgressBar("Snapshoting files"))
-	go executor.Start(fileSizeDuplicates)
+	results := executor.Start(fileSizeDuplicates)
 
 	// 收集结果
 	fileSnapshotMap := map[string][]string{}
-	executor.Drain(func(res grow.Payload[string]) {
-		fileSnapshotMap[res.Value] = append(fileSnapshotMap[res.Value], origin[res.ID])
-	})
+	for _, res := range results {
+		fileSnapshotMap[res.Result] = append(fileSnapshotMap[res.Result], res.Task)
+	}
 
 	var fileSnapshotDuplicates []string
 	for _, paths := range fileSnapshotMap {
@@ -57,21 +51,15 @@ func getSnapshotDuplicate(fileSizeDuplicates []string, numWorkers int) ([]string
 }
 
 func getHashDuplicate(fileSnapshotDuplicates []string, fileInfoMap FileInfoMap, numWorkers int) (map[FileInfo][]string, error) {
-	// 利用hash来进行三次判断
-	origin := make(map[int]string, len(fileSnapshotDuplicates))
-	for i, path := range fileSnapshotDuplicates {
-		origin[i] = path
-	}
-
 	// 并行计算文件hash
 	executor := grow.NewExecutor("HashExecutor", GetFileSHA1, numWorkers, grow.NewProgressBar("Hashing files"))
-	go executor.Start(fileSnapshotDuplicates)
+	results := executor.Start(fileSnapshotDuplicates)
 
 	// 收集结果
 	fileHashMap := map[string][]string{}
-	executor.Drain(func(res grow.Payload[string]) {
-		fileHashMap[res.Value] = append(fileHashMap[res.Value], origin[res.ID])
-	})
+	for _, res := range results {
+		fileHashMap[res.Result] = append(fileHashMap[res.Result], res.Task)
+	}
 	fileHashDuplicates := map[FileInfo][]string{}
 	for hash, paths := range fileHashMap {
 		if len(paths) > 1 {
