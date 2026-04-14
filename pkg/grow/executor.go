@@ -14,19 +14,22 @@ type Executor[T any, R any] struct {
 
 	TaskChan    chan Payload[T]
 	ResultChan  chan Payload[R]
-	ErrChan     chan ExecuteError
 	ControlChan chan ControlSignal
 
 	observers []Observer
-	logSink   *funnel.Spout[LogRecord]
-	logSource *LogSource
+	logSpout  *funnel.Spout[LogRecord]
+	logInlet  *LogInlet
+	failSpout *funnel.Spout[FailRecord]
+	failInlet *FailInlet
 	Counter
 }
 
 // NewExecutor 创建执行器
 func NewExecutor[T any, R any](name string, processor func(T) (R, error), numWorkers int, observers ...Observer) *Executor[T, R] {
-	logSink := funnel.NewSpout(&LogRecordHandler{}, 100, time.Second)
-	logSource := NewLogSource(logSink.GetQueue(), time.Second, "INFO")
+	logSpout := funnel.NewSpout(&LogRecordHandler{}, 100, time.Second)
+	logInlet := NewLogInlet(logSpout.GetQueue(), time.Second, "INFO")
+	failSpout := funnel.NewSpout(&FailRecordHandler{source: name}, 100, time.Second)
+	failInlet := NewFailInlet(failSpout.GetQueue(), time.Second)
 
 	return &Executor[T, R]{
 		Name:       name,
@@ -35,12 +38,13 @@ func NewExecutor[T any, R any](name string, processor func(T) (R, error), numWor
 
 		TaskChan:    make(chan Payload[T], numWorkers),
 		ResultChan:  make(chan Payload[R], numWorkers),
-		ErrChan:     make(chan ExecuteError, numWorkers),
 		ControlChan: make(chan ControlSignal, numWorkers),
 
 		observers: observers,
-		logSink:   logSink,
-		logSource: logSource,
+		logSpout:  logSpout,
+		logInlet:  logInlet,
+		failSpout: failSpout,
+		failInlet: failInlet,
 	}
 }
 
@@ -78,7 +82,7 @@ func (e *Executor[T, R]) processTaskSuccess(taskPayload Payload[T], result R, st
 	taskRepr := trunc(fmt.Sprintf("%+v", taskPayload.Value), 50)
 	resultRepr := trunc(fmt.Sprintf("%+v", result), 25)
 	useTime := time.Since(startTime).Seconds()
-	e.logSource.TaskSuccess(e.Name, taskRepr, resultRepr, useTime)
+	e.logInlet.TaskSuccess(e.Name, taskRepr, resultRepr, useTime)
 
 	e.ResultChan <- Payload[R]{ID: taskPayload.ID, Value: result}
 }
@@ -89,27 +93,19 @@ func (e *Executor[T, R]) handleTaskError(taskPayload Payload[T], err error) {
 	e.reportProgress()
 
 	taskRepr := trunc(fmt.Sprintf("%+v", taskPayload.Value), 50)
-	e.logSource.TaskError(e.Name, taskRepr, err)
-
-	e.ErrChan <- ExecuteError{ID: taskPayload.ID, Error: err}
+	e.logInlet.TaskError(e.Name, taskRepr, err)
+	e.failInlet.TaskError(e.Name, taskPayload.ID, taskPayload.Value, err)
 }
 
-// Drain 消费指定数量的成功/错误结果，确保结果通道被完整读取
-func (e *Executor[T, R]) Drain(expected int, onSuccess func(Payload[R]), onError func(ExecuteError)) {
+// Drain 消费指定数量的成功结果，确保结果通道被完整读取
+func (e *Executor[T, R]) Drain(expected int, onSuccess func(Payload[R])) {
 	received := 0
 
 	for received < expected {
-		select {
-		case res, _ := <-e.ResultChan:
-			received++
-			if onSuccess != nil {
-				onSuccess(res)
-			}
-		case execErr, _ := <-e.ErrChan:
-			received++
-			if onError != nil {
-				onError(execErr)
-			}
+		res := <-e.ResultChan
+		received++
+		if onSuccess != nil {
+			onSuccess(res)
 		}
 	}
 }
@@ -169,8 +165,9 @@ func (e *Executor[T, R]) runner() {
 
 // Start 启动执行器
 func (e *Executor[T, R]) Start(tasks []T) {
-	e.logSink.Start()
-	e.logSource.StartExecutor(e.Name, len(tasks))
+	e.logSpout.Start()
+	e.failSpout.Start()
+	e.logInlet.StartExecutor(e.Name, len(tasks))
 	startTime := time.Now()
 
 	e.SetTotal(len(tasks))
@@ -181,8 +178,8 @@ func (e *Executor[T, R]) Start(tasks []T) {
 
 	e.notifyFinish()
 	close(e.ResultChan)
-	close(e.ErrChan)
 
-	e.logSource.EndExecutor(e.Name, time.Since(startTime).Seconds(), int(e.success.Load()), int(e.failed.Load()))
-	e.logSink.Stop()
+	e.logInlet.EndExecutor(e.Name, time.Since(startTime).Seconds(), int(e.success.Load()), int(e.failed.Load()))
+	e.logSpout.Stop()
+	e.failSpout.Stop()
 }
