@@ -2,6 +2,7 @@ package grow
 
 import (
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/Mr-xiaotian/CelestialForge/pkg/funnel"
@@ -21,14 +22,20 @@ type Executor[T any, R any] struct {
 	logInlet  *LogInlet
 	failSpout *funnel.Spout[FailRecord]
 	failInlet *FailInlet
+
+	state atomic.Int32 // 0=idle, 1=running, 2=done
 	Counter
+}
+
+func (e *Executor[T, R]) State() int32 {
+	return e.state.Load()
 }
 
 // NewExecutor 创建执行器
 func NewExecutor[T any, R any](name string, processor func(T) (R, error), numWorkers int, observers ...Observer) *Executor[T, R] {
 	logSpout := funnel.NewSpout(&LogRecordHandler{}, 100, time.Second)
 	logInlet := NewLogInlet(logSpout.GetQueue(), time.Second, "INFO")
-	failSpout := funnel.NewSpout(&FailRecordHandler{source: name}, 100, time.Second)
+	failSpout := funnel.NewSpout(&FailRecordHandler{}, 100, time.Second)
 	failInlet := NewFailInlet(failSpout.GetQueue(), time.Second)
 
 	return &Executor[T, R]{
@@ -97,13 +104,9 @@ func (e *Executor[T, R]) handleTaskError(taskPayload Payload[T], err error) {
 	e.failInlet.TaskError(e.Name, taskPayload.ID, taskPayload.Value, err)
 }
 
-// Drain 消费指定数量的成功结果，确保结果通道被完整读取
-func (e *Executor[T, R]) Drain(expected int, onSuccess func(Payload[R])) {
-	received := 0
-
-	for received < expected {
-		res := <-e.ResultChan
-		received++
+// Drain 消费成功结果，直到执行器结束
+func (e *Executor[T, R]) Drain(onSuccess func(Payload[R])) {
+	for res := range e.ResultChan {
 		if onSuccess != nil {
 			onSuccess(res)
 		}
@@ -170,6 +173,7 @@ func (e *Executor[T, R]) Start(tasks []T) {
 	e.logInlet.StartExecutor(e.Name, len(tasks))
 	startTime := time.Now()
 
+	e.state.Store(1)
 	e.SetTotal(len(tasks))
 	e.notifyStart()
 
@@ -178,6 +182,7 @@ func (e *Executor[T, R]) Start(tasks []T) {
 
 	e.notifyFinish()
 	close(e.ResultChan)
+	e.state.Store(2)
 
 	e.logInlet.EndExecutor(e.Name, time.Since(startTime).Seconds(), int(e.success.Load()), int(e.failed.Load()))
 	e.logSpout.Stop()

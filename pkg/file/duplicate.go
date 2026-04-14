@@ -62,7 +62,7 @@ func getSnapshotDuplicate(fileSizeDuplicates []string, numWorkers int) ([]string
 
 	// 收集结果
 	fileSnapshotMap := map[string][]string{}
-	executor.Drain(len(origin), func(res grow.Payload[string]) {
+	executor.Drain(func(res grow.Payload[string]) {
 		fileSnapshotMap[res.Value] = append(fileSnapshotMap[res.Value], origin[res.ID])
 	})
 
@@ -90,7 +90,7 @@ func getHashDuplicate(fileSnapshotDuplicates []string, fileInfoMap FileInfoMap, 
 
 	// 收集结果
 	fileHashMap := map[string][]string{}
-	executor.Drain(len(origin), func(res grow.Payload[string]) {
+	executor.Drain(func(res grow.Payload[string]) {
 		fileHashMap[res.Value] = append(fileHashMap[res.Value], origin[res.ID])
 	})
 	fileHashDuplicates := map[FileInfo][]string{}

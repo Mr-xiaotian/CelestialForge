@@ -18,7 +18,6 @@ type FailRecord struct {
 }
 
 type FailRecordHandler struct {
-	source   string
 	FailPath string
 	FailFile *os.File
 }
@@ -27,9 +26,9 @@ func (f *FailRecordHandler) BeforeStart() error {
 	var err error
 
 	today := time.Now().Format("2006-01-02")
-	now := time.Now().Format("15-04-05")
-	f.FailPath = fmt.Sprintf("failback/%s/%s_fail(%s).jsonl", today, f.source, now)
-	if err = os.MkdirAll(fmt.Sprintf("failback/%s", today), 0755); err != nil {
+	now := time.Now().Format("15-04-05.000")
+	f.FailPath = fmt.Sprintf("fallback/%s/grow_fail(%s).jsonl", today, now)
+	if err = os.MkdirAll(fmt.Sprintf("fallback/%s", today), 0755); err != nil {
 		return fmt.Errorf("创建失败记录目录失败: %w", err)
 	}
 
