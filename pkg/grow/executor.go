@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Mr-xiaotian/CelestialForge/pkg/pipline"
+	"github.com/Mr-xiaotian/CelestialForge/pkg/funnel"
 )
 
 type Executor[T any, R any] struct {
@@ -13,14 +13,35 @@ type Executor[T any, R any] struct {
 	numWorkers int
 
 	TaskChan    chan Payload[T]
-	SuccChan    chan Payload[R]
+	ResultChan  chan Payload[R]
 	ErrChan     chan ExecuteError
 	ControlChan chan ControlSignal
 
 	observers []Observer
-	logSink   *pipline.Sink[LogRecord]
+	logSink   *funnel.Spout[LogRecord]
 	logSource *LogSource
 	Counter
+}
+
+// NewExecutor 创建执行器
+func NewExecutor[T any, R any](name string, processor func(T) (R, error), numWorkers int, observers ...Observer) *Executor[T, R] {
+	logSink := funnel.NewSpout(&LogRecordHandler{}, 100, time.Second)
+	logSource := NewLogSource(logSink.GetQueue(), time.Second, "INFO")
+
+	return &Executor[T, R]{
+		Name:       name,
+		processor:  processor,
+		numWorkers: numWorkers,
+
+		TaskChan:    make(chan Payload[T], numWorkers),
+		ResultChan:  make(chan Payload[R], numWorkers),
+		ErrChan:     make(chan ExecuteError, numWorkers),
+		ControlChan: make(chan ControlSignal, numWorkers),
+
+		observers: observers,
+		logSink:   logSink,
+		logSource: logSource,
+	}
 }
 
 // reportProgress 报告进度
@@ -59,7 +80,7 @@ func (e *Executor[T, R]) processTaskSuccess(taskPayload Payload[T], result R, st
 	useTime := time.Since(startTime).Seconds()
 	e.logSource.TaskSuccess(e.Name, taskRepr, resultRepr, useTime)
 
-	e.SuccChan <- Payload[R]{ID: taskPayload.ID, Value: result}
+	e.ResultChan <- Payload[R]{ID: taskPayload.ID, Value: result}
 }
 
 // handleTaskError 处理错误任务
@@ -75,18 +96,16 @@ func (e *Executor[T, R]) handleTaskError(taskPayload Payload[T], err error) {
 
 // Drain 消费指定数量的成功/错误结果，确保结果通道被完整读取
 func (e *Executor[T, R]) Drain(expected int, onSuccess func(Payload[R]), onError func(ExecuteError)) {
-	succChan := e.SuccChan
-	errChan := e.ErrChan
 	received := 0
 
 	for received < expected {
 		select {
-		case res, _ := <-succChan:
+		case res, _ := <-e.ResultChan:
 			received++
 			if onSuccess != nil {
 				onSuccess(res)
 			}
-		case execErr, _ := <-errChan:
+		case execErr, _ := <-e.ErrChan:
 			received++
 			if onError != nil {
 				onError(execErr)
@@ -161,30 +180,9 @@ func (e *Executor[T, R]) Start(tasks []T) {
 	e.runner()
 
 	e.notifyFinish()
-	close(e.SuccChan)
+	close(e.ResultChan)
 	close(e.ErrChan)
 
 	e.logSource.EndExecutor(e.Name, time.Since(startTime).Seconds(), int(e.success.Load()), int(e.failed.Load()))
 	e.logSink.Stop()
-}
-
-// NewExecutor 创建执行器
-func NewExecutor[T any, R any](name string, processor func(T) (R, error), numWorkers int, observers ...Observer) *Executor[T, R] {
-	logSink := pipline.NewSink(&LogRecordHandler{}, 100, time.Second)
-	logSource := NewLogSource(logSink.GetQueue(), time.Second, "INFO")
-
-	return &Executor[T, R]{
-		Name:       name,
-		processor:  processor,
-		numWorkers: numWorkers,
-
-		TaskChan:    make(chan Payload[T], numWorkers),
-		SuccChan:    make(chan Payload[R], numWorkers),
-		ErrChan:     make(chan ExecuteError, numWorkers),
-		ControlChan: make(chan ControlSignal, numWorkers),
-
-		observers: observers,
-		logSink:   logSink,
-		logSource: logSource,
-	}
 }

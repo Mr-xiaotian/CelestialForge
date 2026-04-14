@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/Mr-xiaotian/CelestialForge/pkg/pipline"
+	"github.com/Mr-xiaotian/CelestialForge/pkg/funnel"
 )
 
 var levelOrder = map[string]int{
@@ -68,7 +68,7 @@ func (h *LogRecordHandler) AfterStop() error {
 
 // LogSource 日志生产端，内嵌 Source 并提供级别过滤和领域方法
 type LogSource struct {
-	pipline.Source[LogRecord]
+	funnel.Inlet[LogRecord]
 	minLevel int
 }
 
@@ -78,7 +78,7 @@ func NewLogSource(ch chan<- LogRecord, timeout time.Duration, level string) *Log
 		minLevel = levelOrder["INFO"]
 	}
 	return &LogSource{
-		Source:   *pipline.NewSource(ch, timeout),
+		Inlet:    *funnel.NewInlet(ch, timeout),
 		minLevel: minLevel,
 	}
 }

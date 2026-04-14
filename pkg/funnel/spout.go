@@ -1,4 +1,4 @@
-package pipline
+package funnel
 
 import (
 	"context"
@@ -15,7 +15,7 @@ type RecordHandler[T any] interface {
 }
 
 // 基础结构体，包含状态和通用逻辑
-type Sink[T any] struct {
+type Spout[T any] struct {
 	// 状态字段
 	ch      chan T
 	ctx     context.Context
@@ -28,9 +28,9 @@ type Sink[T any] struct {
 }
 
 // 构造函数
-func NewSink[T any](handler RecordHandler[T], bufferSize int, timeout time.Duration) *Sink[T] {
+func NewSpout[T any](handler RecordHandler[T], bufferSize int, timeout time.Duration) *Spout[T] {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Sink[T]{
+	return &Spout[T]{
 		ch:      make(chan T, bufferSize),
 		ctx:     ctx,
 		cancel:  cancel,
@@ -40,23 +40,23 @@ func NewSink[T any](handler RecordHandler[T], bufferSize int, timeout time.Durat
 }
 
 // GetQueue 返回写入通道
-func (b *Sink[T]) GetQueue() chan<- T {
+func (b *Spout[T]) GetQueue() chan<- T {
 	return b.ch
 }
 
 // Start 启动监听
-func (b *Sink[T]) Start() error {
+func (b *Spout[T]) Start() error {
 	if err := b.handler.BeforeStart(); err != nil {
 		return err
 	}
 
 	b.wg.Add(1)
-	go b.listen()
+	go b.spout()
 	return nil
 }
 
-// listen 持续消费通道中的记录
-func (b *Sink[T]) listen() {
+// spout 持续消费通道中的记录
+func (b *Spout[T]) spout() {
 	defer b.wg.Done()
 
 	for {
@@ -76,7 +76,7 @@ func (b *Sink[T]) listen() {
 }
 
 // Stop 停止监听
-func (b *Sink[T]) Stop() error {
+func (b *Spout[T]) Stop() error {
 	close(b.ch) // 先尝试优雅关闭
 
 	// 等待 Handler 处理完，但最多等 timeout 秒
