@@ -10,27 +10,6 @@ import (
 	"github.com/Mr-xiaotian/CelestialForge/pkg/units"
 )
 
-// executor
-type SnapshotExecutor struct {
-	*grow.Executor[string, string]
-}
-type HashExecutor struct {
-	*grow.Executor[string, string]
-}
-
-func NewSnapshotExecutor(processor func(string) (string, error), numWorkers int, observers ...grow.Observer) *SnapshotExecutor {
-	executor := &SnapshotExecutor{
-		Executor: grow.NewExecutor("SnapshotExecutor", processor, numWorkers, observers...),
-	}
-	return executor
-}
-func NewHashExecutor(processor func(string) (string, error), numWorkers int, observers ...grow.Observer) *HashExecutor {
-	executor := &HashExecutor{
-		Executor: grow.NewExecutor("HashExecutor", processor, numWorkers, observers...),
-	}
-	return executor
-}
-
 // func
 func getSizeDuplicate(fileInfoMap FileInfoMap) []string {
 	fileSizeMap := make(map[units.HumanBytes][]string)
@@ -57,7 +36,7 @@ func getSnapshotDuplicate(fileSizeDuplicates []string, numWorkers int) ([]string
 	}
 
 	// 并行计算文件hash
-	executor := NewSnapshotExecutor(GetFileSnapshotSHA1, numWorkers, grow.NewProgressBar("Snapshoting files"))
+	executor := grow.NewExecutor("SnapshotExecutor", GetFileSnapshotSHA1, numWorkers, grow.NewProgressBar("Snapshoting files"))
 	go executor.Start(fileSizeDuplicates)
 
 	// 收集结果
@@ -85,7 +64,7 @@ func getHashDuplicate(fileSnapshotDuplicates []string, fileInfoMap FileInfoMap, 
 	}
 
 	// 并行计算文件hash
-	executor := NewHashExecutor(GetFileSHA1, numWorkers, grow.NewProgressBar("Hashing files"))
+	executor := grow.NewExecutor("HashExecutor", GetFileSHA1, numWorkers, grow.NewProgressBar("Hashing files"))
 	go executor.Start(fileSnapshotDuplicates)
 
 	// 收集结果

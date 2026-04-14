@@ -6,9 +6,3 @@ type Payload[V any] struct {
 	ID    int
 	Value V
 }
-
-// ExecuteError wraps a failed task
-type ExecuteError struct {
-	ID    int
-	Error error
-}

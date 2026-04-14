@@ -103,9 +103,9 @@ func (l *LogInlet) EndExecutor(executorName string, useTime float64, successNum,
 }
 
 func (l *LogInlet) TaskSuccess(executorName string, taskRepr string, resultRepr string, useTime float64) {
-	l.log("SUCCESS", fmt.Sprintf("In '%s', %s successed. Result is %s. Use %.2fs.", executorName, taskRepr, resultRepr, useTime))
+	l.log("SUCCESS", fmt.Sprintf("In '%s', Task %s successed. Result is %s. Use %.2fs.", executorName, taskRepr, resultRepr, useTime))
 }
 
 func (l *LogInlet) TaskError(executorName string, taskRepr string, err error) {
-	l.log("ERROR", fmt.Sprintf("In '%s', %s failed: %v.", executorName, taskRepr, err))
+	l.log("ERROR", fmt.Sprintf("In '%s', Task %s failed: %v.", executorName, taskRepr, err))
 }

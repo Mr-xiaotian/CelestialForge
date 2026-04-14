@@ -20,8 +20,8 @@ type Executor[T any, R any] struct {
 	observers []Observer
 	logSpout  *funnel.Spout[LogRecord]
 	logInlet  *LogInlet
-	failSpout *funnel.Spout[FailRecord]
-	failInlet *FailInlet
+	failSpout *funnel.Spout[FailRecord[T]]
+	failInlet *FailInlet[T]
 
 	state atomic.Int32 // 0=idle, 1=running, 2=done
 	Counter
@@ -35,7 +35,7 @@ func (e *Executor[T, R]) State() int32 {
 func NewExecutor[T any, R any](name string, processor func(T) (R, error), numWorkers int, observers ...Observer) *Executor[T, R] {
 	logSpout := funnel.NewSpout(&LogRecordHandler{}, 100, time.Second)
 	logInlet := NewLogInlet(logSpout.GetQueue(), time.Second, "INFO")
-	failSpout := funnel.NewSpout(&FailRecordHandler{}, 100, time.Second)
+	failSpout := funnel.NewSpout(&FailRecordHandler[T]{}, 100, time.Second)
 	failInlet := NewFailInlet(failSpout.GetQueue(), time.Second)
 
 	return &Executor[T, R]{

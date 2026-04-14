@@ -9,20 +9,20 @@ import (
 	"github.com/Mr-xiaotian/CelestialForge/pkg/funnel"
 )
 
-type FailRecord struct {
+type FailRecord[T any] struct {
 	FormatTime   string
 	ExecutorName string
 	TaskID       int
-	TaskValue    any
+	TaskValue    T
 	ErrorMessage string
 }
 
-type FailRecordHandler struct {
+type FailRecordHandler[T any] struct {
 	FailPath string
 	FailFile *os.File
 }
 
-func (f *FailRecordHandler) BeforeStart() error {
+func (f *FailRecordHandler[T]) BeforeStart() error {
 	var err error
 
 	today := time.Now().Format("2006-01-02")
@@ -40,7 +40,7 @@ func (f *FailRecordHandler) BeforeStart() error {
 	return nil
 }
 
-func (f *FailRecordHandler) HandleRecord(record FailRecord) error {
+func (f *FailRecordHandler[T]) HandleRecord(record FailRecord[T]) error {
 	var err error
 	var b []byte
 
@@ -57,7 +57,7 @@ func (f *FailRecordHandler) HandleRecord(record FailRecord) error {
 	return err
 }
 
-func (f *FailRecordHandler) AfterStop() error {
+func (f *FailRecordHandler[T]) AfterStop() error {
 	err := f.FailFile.Close()
 	if err != nil {
 		return fmt.Errorf("关闭失败记录文件失败: %w", err)
@@ -67,18 +67,18 @@ func (f *FailRecordHandler) AfterStop() error {
 }
 
 // FailInlet 失败记录生产端，内嵌 Inlet 并提供领域方法
-type FailInlet struct {
-	funnel.Inlet[FailRecord]
+type FailInlet[T any] struct {
+	funnel.Inlet[FailRecord[T]]
 }
 
-func NewFailInlet(ch chan<- FailRecord, timeout time.Duration) *FailInlet {
-	return &FailInlet{
+func NewFailInlet[T any](ch chan<- FailRecord[T], timeout time.Duration) *FailInlet[T] {
+	return &FailInlet[T]{
 		Inlet: *funnel.NewInlet(ch, timeout),
 	}
 }
 
-func (f *FailInlet) TaskError(executorName string, taskID int, task any, err error) {
-	f.Send(FailRecord{
+func (f *FailInlet[T]) TaskError(executorName string, taskID int, task T, err error) {
+	f.Send(FailRecord[T]{
 		FormatTime:   time.Now().Format("2006-01-02 15:04:05"),
 		ExecutorName: executorName,
 		TaskID:       taskID,
