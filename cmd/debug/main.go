@@ -15,7 +15,7 @@ func debug_info() {
 }
 
 func debug_duplicate() {
-	identicalMap, _ := file.ScanDuplicateFile(`D:\Project\CelestialForge`, 4)
+	identicalMap, _ := file.ScanDuplicateFile(`.`, 4)
 	identicalReport := file.DuplicateReport(identicalMap)
 	fmt.Println(identicalReport)
 }
@@ -34,7 +34,7 @@ func debug_bytes() {
 }
 
 func debug_size() {
-	dirSize, err := file.GetDirSize(`D:\Project\CelestialForge`)
+	dirSize, err := file.GetDirSize(`.`)
 	if err != nil {
 		fmt.Printf("GetDirSize error: %v\n", err)
 		return
@@ -43,7 +43,7 @@ func debug_size() {
 }
 
 func debug_mtime() {
-	dirMtime, err := file.GetDirMtime(`D:\Project\CelestialForge`)
+	dirMtime, err := file.GetDirMtime(`.`)
 	if err != nil {
 		fmt.Printf("GetDirMtime error: %v\n", err)
 		return
@@ -52,7 +52,7 @@ func debug_mtime() {
 }
 
 func debug_hash() {
-	filePath := `D:\Project\CelestialForge\temp\duplicate.txt`
+	filePath := `.\temp\duplicate.txt`
 	md5, err := file.GetFileMD5(filePath)
 	snapshotMD5, err := file.GetFileSnapshotMD5(filePath)
 	if err != nil {
