@@ -9,17 +9,17 @@ import (
 	"github.com/Mr-xiaotian/CelestialForge/pkg/funnel"
 )
 
-// Executor 并发任务执行器。将一组任务分发给 worker 池并行处理，
+// Plot 并发任务执行器。将一组种子（任务）分发给 tend 池并行培育，
 // 通过 funnel 系统记录日志和失败信息。
-// T 为输入任务类型，R 为输出结果类型。
-type Executor[T any, R any] struct {
+// T 为种子类型，R 为果实类型。
+type Plot[T any, R any] struct {
 	Name       string
-	processor  func(T) (R, error)
+	cultivator func(T) (R, error)
 	numWorkers int
 	wg         sync.WaitGroup
 
-	TaskChan    chan Payload[T]
-	ResultChan  chan Payload[R]
+	SeedChan    chan Payload[T]
+	FruitChan   chan Payload[R]
 	ControlChan chan ControlSignal
 
 	observers []Observer
@@ -33,24 +33,25 @@ type Executor[T any, R any] struct {
 }
 
 // State 返回执行器当前状态：0=idle, 1=running, 2=done。
-func (e *Executor[T, R]) State() int32 {
+func (e *Plot[T, R]) State() int32 {
 	return e.state.Load()
 }
 
-// NewExecutor 创建执行器
-func NewExecutor[T any, R any](name string, processor func(T) (R, error), numWorkers int, observers ...Observer) *Executor[T, R] {
+// NewPlot 创建一个 Plot 实例。
+// cultivator 为培育函数，接收种子返回果实。
+func NewPlot[T any, R any](name string, cultivator func(T) (R, error), numWorkers int, observers ...Observer) *Plot[T, R] {
 	logSpout := funnel.NewSpout(&LogRecordHandler{}, 100, time.Second)
 	logInlet := NewLogInlet(logSpout.GetQueue(), time.Second, "INFO")
 	failSpout := funnel.NewSpout(&FailRecordHandler[T]{}, 100, time.Second)
 	failInlet := NewFailInlet(failSpout.GetQueue(), time.Second)
 
-	return &Executor[T, R]{
+	return &Plot[T, R]{
 		Name:       name,
-		processor:  processor,
+		cultivator: cultivator,
 		numWorkers: numWorkers,
 
-		TaskChan:    make(chan Payload[T], numWorkers),
-		ResultChan:  make(chan Payload[R], numWorkers),
+		SeedChan:    make(chan Payload[T], numWorkers),
+		FruitChan:   make(chan Payload[R], numWorkers),
 		ControlChan: make(chan ControlSignal, numWorkers),
 
 		observers: observers,
@@ -64,7 +65,7 @@ func NewExecutor[T any, R any](name string, processor func(T) (R, error), numWor
 // ==== Observer Hooks ====
 
 // reportProgress 报告进度
-func (e *Executor[T, R]) reportProgress() {
+func (e *Plot[T, R]) reportProgress() {
 	completed := e.GetCompleted()
 	total := e.GetTotal()
 	for _, observer := range e.observers {
@@ -73,7 +74,7 @@ func (e *Executor[T, R]) reportProgress() {
 }
 
 // notifyStart 通知开始
-func (e *Executor[T, R]) notifyStart() {
+func (e *Plot[T, R]) notifyStart() {
 	e.state.Store(1)
 	total := e.GetTotal()
 	for _, observer := range e.observers {
@@ -82,7 +83,7 @@ func (e *Executor[T, R]) notifyStart() {
 }
 
 // notifyFinish 通知完成
-func (e *Executor[T, R]) notifyFinish() {
+func (e *Plot[T, R]) notifyFinish() {
 	e.state.Store(2)
 	completed := e.GetCompleted()
 	total := e.GetTotal()
@@ -93,8 +94,8 @@ func (e *Executor[T, R]) notifyFinish() {
 
 // ==== Task Handling ====
 
-// processTaskSuccess 处理成功任务
-func (e *Executor[T, R]) processTaskSuccess(taskPayload Payload[T], result R, startTime time.Time) {
+// processTaskSuccess 处理培育成功的种子
+func (e *Plot[T, R]) processTaskSuccess(taskPayload Payload[T], result R, startTime time.Time) {
 	e.AddSuccess(1)
 	e.reportProgress()
 
@@ -103,11 +104,11 @@ func (e *Executor[T, R]) processTaskSuccess(taskPayload Payload[T], result R, st
 	useTime := time.Since(startTime).Seconds()
 	e.logInlet.TaskSuccess(e.Name, taskRepr, resultRepr, useTime)
 
-	e.ResultChan <- Payload[R]{ID: taskPayload.ID, Value: result, Prev: taskPayload.Value}
+	e.FruitChan <- Payload[R]{ID: taskPayload.ID, Value: result, Prev: taskPayload.Value}
 }
 
-// handleTaskError 处理错误任务
-func (e *Executor[T, R]) handleTaskError(taskPayload Payload[T], err error) {
+// handleTaskError 处理培育失败的种子
+func (e *Plot[T, R]) handleTaskError(taskPayload Payload[T], err error) {
 	e.AddFailed(1)
 	e.reportProgress()
 
@@ -118,27 +119,27 @@ func (e *Executor[T, R]) handleTaskError(taskPayload Payload[T], err error) {
 
 // ==== Internal Pipeline ====
 
-// seed 内部批量注入任务
-func (e *Executor[T, R]) seed(tasks []T) {
+// seed 内部批量播种
+func (e *Plot[T, R]) seed(tasks []T) {
 	e.AddTotal(len(tasks))
 	for idx, task := range tasks {
-		e.TaskChan <- Payload[T]{ID: idx, Value: task}
+		e.SeedChan <- Payload[T]{ID: idx, Value: task}
 	}
-	e.ControlChan <- ControlSignal{Source: "executor"}
+	e.ControlChan <- ControlSignal{Source: "plot"}
 }
 
-// worker 工作线
-func (e *Executor[T, R]) worker(taskPayload Payload[T], sem chan struct{}, done chan struct{}) {
+// tend 照料单个任务
+func (e *Plot[T, R]) tend(taskPayload Payload[T], sem chan struct{}, done chan struct{}) {
 	defer func() {
 		if r := recover(); r != nil {
-			e.handleTaskError(taskPayload, fmt.Errorf("processor panic: %v", r))
+			e.handleTaskError(taskPayload, fmt.Errorf("cultivator panic: %v", r))
 		}
 		<-sem              // 释放并发令牌
 		done <- struct{}{} // 发送完成信号
 	}()
 
 	startTime := time.Now()
-	result, err := e.processor(taskPayload.Value)
+	result, err := e.cultivator(taskPayload.Value)
 	if err != nil {
 		e.handleTaskError(taskPayload, err)
 	} else {
@@ -146,10 +147,10 @@ func (e *Executor[T, R]) worker(taskPayload Payload[T], sem chan struct{}, done 
 	}
 }
 
-// dispatch 调度器
-func (e *Executor[T, R]) dispatch() {
+// sprout 调度器，将种子分发给 tend 协程
+func (e *Plot[T, R]) sprout() {
 	sem := make(chan struct{}, e.numWorkers)  // 控制并发数
-	done := make(chan struct{}, e.numWorkers) // 控制worker完成信号
+	done := make(chan struct{}, e.numWorkers) // 控制tend完成信号
 
 	inputClosed := false
 	inFlight := 0
@@ -159,16 +160,16 @@ func (e *Executor[T, R]) dispatch() {
 
 	for {
 		if shouldFinish() {
-			close(e.ResultChan)
+			close(e.FruitChan)
 			return
 		}
 
 		select {
-		case task := <-e.TaskChan:
+		case task := <-e.SeedChan:
 			sem <- struct{}{} // 获取并发令牌
 			inFlight++
-			go e.worker(task, sem, done)
-		case <-done: // worker完成信号
+			go e.tend(task, sem, done)
+		case <-done: // tend完成信号
 			inFlight--
 		case <-e.ControlChan:
 			inputClosed = true
@@ -176,13 +177,13 @@ func (e *Executor[T, R]) dispatch() {
 	}
 }
 
-// collect 收集所有成功结果，并保留对应的任务信息
-func (e *Executor[T, R]) collect() []TaskResult[T, R] {
-	results := make([]TaskResult[T, R], 0)
-	for res := range e.ResultChan {
-		results = append(results, TaskResult[T, R]{
-			Task:   res.Prev.(T),
-			Result: res.Value,
+// harvest 收获所有果实，并保留对应的种子信息
+func (e *Plot[T, R]) harvest() []Karma[T, R] {
+	results := make([]Karma[T, R], 0)
+	for res := range e.FruitChan {
+		results = append(results, Karma[T, R]{
+			Seed:  res.Prev.(T),
+			Fruit: res.Value,
 		})
 	}
 	return results
@@ -190,20 +191,20 @@ func (e *Executor[T, R]) collect() []TaskResult[T, R] {
 
 // ==== Sync API ====
 
-// Start 同步启动执行器，阻塞直到所有任务完成并返回结果。
-func (e *Executor[T, R]) Start(tasks []T) []TaskResult[T, R] {
+// Start 同步启动 Plot，阻塞直到所有种子培育完成并返回果实。
+func (e *Plot[T, R]) Start(tasks []T) []Karma[T, R] {
 	e.logSpout.Start()
 	e.failSpout.Start()
-	e.logInlet.StartExecutor(e.Name, len(tasks))
+	e.logInlet.StartPlot(e.Name, len(tasks))
 	startTime := time.Now()
 
 	e.notifyStart()
 	go e.seed(tasks)
-	go e.dispatch()
-	results := e.collect()
+	go e.sprout()
+	results := e.harvest()
 	e.notifyFinish()
 
-	e.logInlet.EndExecutor(e.Name, time.Since(startTime).Seconds(), e.GetSuccess(), e.GetFailed())
+	e.logInlet.EndPlot(e.Name, time.Since(startTime).Seconds(), e.GetSuccess(), e.GetFailed())
 	e.logSpout.Stop()
 	e.failSpout.Stop()
 	return results
@@ -211,44 +212,44 @@ func (e *Executor[T, R]) Start(tasks []T) []TaskResult[T, R] {
 
 // ==== Async API ====
 
-// Seed 外部注入单个任务到 TaskChan。
-func (e *Executor[T, R]) Seed(id int, task T) {
+// Seed 播入单颗种子到 SeedChan。
+func (e *Plot[T, R]) Seed(id int, task T) {
 	e.AddTotal(1)
-	e.TaskChan <- Payload[T]{ID: id, Value: task}
+	e.SeedChan <- Payload[T]{ID: id, Value: task}
 }
 
-// Collect 逐条消费成功结果，阻塞直到 ResultChan 关闭。
-func (e *Executor[T, R]) Collect(onSuccess func(Payload[R])) {
-	for res := range e.ResultChan {
+// Harvest 逐个收获果实，阻塞直到 FruitChan 关闭。
+func (e *Plot[T, R]) Harvest(onSuccess func(Payload[R])) {
+	for res := range e.FruitChan {
 		if onSuccess != nil {
 			onSuccess(res)
 		}
 	}
 }
 
-// StartAsync 异步启动调度器，任务输入和结果消费由外部控制
-// 外部通过 Seed 注入任务，通过 Collect 消费结果
+// StartAsync 异步启动调度器，种子播入和果实收获由外部控制。
+// 外部通过 Seed 播种，通过 Harvest 收获
 // 完成后需调用 WaitAsync 进行清理
-func (e *Executor[T, R]) StartAsync() {
+func (e *Plot[T, R]) StartAsync() {
 	e.wg.Add(1)
 	defer e.wg.Done()
 
-	e.logInlet.StartExecutor(e.Name, 0)
+	e.logInlet.StartPlot(e.Name, 0)
 	startTime := time.Now()
 
 	e.notifyStart()
-	e.dispatch()
+	e.sprout()
 	e.notifyFinish()
 
-	e.logInlet.EndExecutor(e.Name, time.Since(startTime).Seconds(), e.GetSuccess(), e.GetFailed())
+	e.logInlet.EndPlot(e.Name, time.Since(startTime).Seconds(), e.GetSuccess(), e.GetFailed())
 }
 
-// Seal 封闭任务输入，通知 dispatch 不再有新任务。
-func (e *Executor[T, R]) Seal() {
+// Seal 封闭种子入口，通知 sprout 不再有新种子。
+func (e *Plot[T, R]) Seal() {
 	e.ControlChan <- ControlSignal{Source: e.Name}
 }
 
-// WaitAsync 等待异步执行器结束并清理资源
-func (e *Executor[T, R]) WaitAsync() {
+// WaitAsync 等待异步 Plot 结束并清理资源
+func (e *Plot[T, R]) WaitAsync() {
 	e.wg.Wait()
 }

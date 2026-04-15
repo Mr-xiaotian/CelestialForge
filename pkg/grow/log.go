@@ -107,22 +107,22 @@ func (l *LogInlet) log(level string, message string) {
 	})
 }
 
-// StartExecutor 记录执行器启动日志。
-func (l *LogInlet) StartExecutor(executorName string, numWorkers int) {
-	l.log("INFO", fmt.Sprintf("'%s' start by %d workers.", executorName, numWorkers))
+// StartPlot 记录 Plot 启动日志。
+func (l *LogInlet) StartPlot(plotName string, numWorkers int) {
+	l.log("INFO", fmt.Sprintf("'%s' start by %d workers.", plotName, numWorkers))
 }
 
-// EndExecutor 记录执行器结束日志。
-func (l *LogInlet) EndExecutor(executorName string, useTime float64, successNum, failedNum int) {
-	l.log("INFO", fmt.Sprintf("'%s' end. Use %.2fs. %d success, %d failed.", executorName, useTime, successNum, failedNum))
+// EndPlot 记录 Plot 结束日志。
+func (l *LogInlet) EndPlot(plotName string, useTime float64, successNum, failedNum int) {
+	l.log("INFO", fmt.Sprintf("'%s' end. Use %.2fs. %d success, %d failed.", plotName, useTime, successNum, failedNum))
 }
 
-// TaskSuccess 记录任务成功日志。
-func (l *LogInlet) TaskSuccess(executorName string, taskRepr string, resultRepr string, useTime float64) {
-	l.log("SUCCESS", fmt.Sprintf("In '%s', Task %s successed. Result is %s. Use %.2fs.", executorName, taskRepr, resultRepr, useTime))
+// TaskSuccess 记录种子培育成功日志。
+func (l *LogInlet) TaskSuccess(plotName string, taskRepr string, resultRepr string, useTime float64) {
+	l.log("SUCCESS", fmt.Sprintf("In '%s', Task %s successed. Result is %s. Use %.2fs.", plotName, taskRepr, resultRepr, useTime))
 }
 
-// TaskError 记录任务失败日志。
-func (l *LogInlet) TaskError(executorName string, taskRepr string, err error) {
-	l.log("ERROR", fmt.Sprintf("In '%s', Task %s failed: %v.", executorName, taskRepr, err))
+// TaskError 记录种子培育失败日志。
+func (l *LogInlet) TaskError(plotName string, taskRepr string, err error) {
+	l.log("ERROR", fmt.Sprintf("In '%s', Task %s failed: %v.", plotName, taskRepr, err))
 }

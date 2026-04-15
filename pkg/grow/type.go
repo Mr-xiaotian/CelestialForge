@@ -1,16 +1,16 @@
 package grow
 
-// Payload is the unified data carrier for pipeline stages.
-// ID tracks the task through the pipeline for tracing back to the original input.
-// Prev stores the previous task when a stage emits derived results.
+// Payload 管道阶段的统一数据载体。
+// ID 用于在管道中追踪种子到原始输入。
+// Prev 存储上一阶段的种子值。
 type Payload[V any] struct {
 	ID    int
 	Value V
 	Prev  any
 }
 
-// TaskResult stores the current result together with its originating task.
-type TaskResult[T any, R any] struct {
-	Task   T
-	Result R
+// Karma 种子与果实的配对，记录一颗种子培育后的结果。
+type Karma[T any, R any] struct {
+	Seed  T
+	Fruit R
 }

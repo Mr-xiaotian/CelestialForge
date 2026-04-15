@@ -14,7 +14,7 @@ import (
 // FailRecord 失败记录条目，序列化为 JSONL 写入文件。
 type FailRecord[T any] struct {
 	FormatTime   string
-	ExecutorName string
+	PlotName     string
 	TaskID       int
 	TaskValue    T
 	ErrorMessage string
@@ -89,11 +89,11 @@ func NewFailInlet[T any](ch chan<- FailRecord[T], timeout time.Duration) *FailIn
 	}
 }
 
-// TaskError 发送一条任务失败记录。
-func (f *FailInlet[T]) TaskError(executorName string, taskID int, task T, err error) {
+// TaskError 发送一条种子培育失败记录。
+func (f *FailInlet[T]) TaskError(plotName string, taskID int, task T, err error) {
 	f.Send(FailRecord[T]{
 		FormatTime:   time.Now().Format("2006-01-02 15:04:05"),
-		ExecutorName: executorName,
+		PlotName:     plotName,
 		TaskID:       taskID,
 		TaskValue:    task,
 		ErrorMessage: fmt.Sprintf("%v", err),

@@ -33,13 +33,13 @@ func getSizeDuplicate(fileInfoMap FileInfoMap) []string {
 // getSnapshotDuplicate 用文件前 4KB 的快照哈希进一步过滤重复候选。
 func getSnapshotDuplicate(fileSizeDuplicates []string, numWorkers int) ([]string, error) {
 	// 并行计算文件hash
-	executor := grow.NewExecutor("SnapshotExecutor", GetFileSnapshotSHA1, numWorkers, grow.NewProgressBar("Snapshoting files"))
-	results := executor.Start(fileSizeDuplicates)
+	plot := grow.NewPlot("SnapshotPlot", GetFileSnapshotSHA1, numWorkers, grow.NewProgressBar("Snapshoting files"))
+	results := plot.Start(fileSizeDuplicates)
 
 	// 收集结果
 	fileSnapshotMap := map[string][]string{}
 	for _, res := range results {
-		fileSnapshotMap[res.Result] = append(fileSnapshotMap[res.Result], res.Task)
+		fileSnapshotMap[res.Fruit] = append(fileSnapshotMap[res.Fruit], res.Seed)
 	}
 
 	var fileSnapshotDuplicates []string
@@ -56,13 +56,13 @@ func getSnapshotDuplicate(fileSizeDuplicates []string, numWorkers int) ([]string
 // getHashDuplicate 用完整文件哈希确认最终重复文件。
 func getHashDuplicate(fileSnapshotDuplicates []string, fileInfoMap FileInfoMap, numWorkers int) (map[FileInfo][]string, error) {
 	// 并行计算文件hash
-	executor := grow.NewExecutor("HashExecutor", GetFileSHA1, numWorkers, grow.NewProgressBar("Hashing files"))
-	results := executor.Start(fileSnapshotDuplicates)
+	plot := grow.NewPlot("HashPlot", GetFileSHA1, numWorkers, grow.NewProgressBar("Hashing files"))
+	results := plot.Start(fileSnapshotDuplicates)
 
 	// 收集结果
 	fileHashMap := map[string][]string{}
 	for _, res := range results {
-		fileHashMap[res.Result] = append(fileHashMap[res.Result], res.Task)
+		fileHashMap[res.Fruit] = append(fileHashMap[res.Fruit], res.Seed)
 	}
 	fileHashDuplicates := map[FileInfo][]string{}
 	for hash, paths := range fileHashMap {

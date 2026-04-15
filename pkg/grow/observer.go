@@ -9,7 +9,7 @@ import (
 	"github.com/schollz/progressbar/v3"
 )
 
-// Observer 任务执行生命周期观察者接口。
+// Observer Plot 生命周期观察者接口。
 type Observer interface {
 	OnStart(total int)
 	OnProgress(completed, total int)
