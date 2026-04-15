@@ -2,6 +2,7 @@ package grow
 
 import (
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -12,6 +13,7 @@ type Executor[T any, R any] struct {
 	Name       string
 	processor  func(T) (R, error)
 	numWorkers int
+	wg         sync.WaitGroup
 
 	TaskChan    chan Payload[T]
 	ResultChan  chan Payload[R]
@@ -57,7 +59,7 @@ func NewExecutor[T any, R any](name string, processor func(T) (R, error), numWor
 
 // reportProgress 报告进度
 func (e *Executor[T, R]) reportProgress() {
-	completed := e.GetComplated()
+	completed := e.GetCompleted()
 	total := e.GetTotal()
 	for _, observer := range e.observers {
 		observer.OnProgress(completed, total)
@@ -66,6 +68,7 @@ func (e *Executor[T, R]) reportProgress() {
 
 // notifyStart 通知开始
 func (e *Executor[T, R]) notifyStart() {
+	e.state.Store(1)
 	total := e.GetTotal()
 	for _, observer := range e.observers {
 		observer.OnStart(total)
@@ -74,7 +77,8 @@ func (e *Executor[T, R]) notifyStart() {
 
 // notifyFinish 通知完成
 func (e *Executor[T, R]) notifyFinish() {
-	completed := e.GetComplated()
+	e.state.Store(2)
+	completed := e.GetCompleted()
 	total := e.GetTotal()
 	for _, observer := range e.observers {
 		observer.OnFinish(completed, total)
@@ -104,16 +108,7 @@ func (e *Executor[T, R]) handleTaskError(taskPayload Payload[T], err error) {
 	e.failInlet.TaskError(e.Name, taskPayload.ID, taskPayload.Value, err)
 }
 
-// Drain 消费成功结果，直到执行器结束
-func (e *Executor[T, R]) Drain(onSuccess func(Payload[R])) {
-	for res := range e.ResultChan {
-		if onSuccess != nil {
-			onSuccess(res)
-		}
-	}
-}
-
-// seed 输入任务
+// seed 内部批量注入任务
 func (e *Executor[T, R]) seed(tasks []T) {
 	for idx, task := range tasks {
 		e.TaskChan <- Payload[T]{ID: idx, Value: task}
@@ -189,7 +184,6 @@ func (e *Executor[T, R]) Start(tasks []T) []TaskResult[T, R] {
 	e.logInlet.StartExecutor(e.Name, len(tasks))
 	startTime := time.Now()
 
-	e.state.Store(1)
 	e.SetTotal(len(tasks))
 	e.notifyStart()
 
@@ -198,10 +192,48 @@ func (e *Executor[T, R]) Start(tasks []T) []TaskResult[T, R] {
 	results := e.collect()
 
 	e.notifyFinish()
-	e.state.Store(2)
 
-	e.logInlet.EndExecutor(e.Name, time.Since(startTime).Seconds(), int(e.success.Load()), int(e.failed.Load()))
+	e.logInlet.EndExecutor(e.Name, time.Since(startTime).Seconds(), e.GetSuccess(), e.GetFailed())
 	e.logSpout.Stop()
 	e.failSpout.Stop()
 	return results
+}
+
+// Collect 消费成功结果，直到执行器结束
+func (e *Executor[T, R]) Collect(onSuccess func(Payload[R])) {
+	for res := range e.ResultChan {
+		if onSuccess != nil {
+			onSuccess(res)
+		}
+	}
+}
+
+// Seed 外部注入单个任务
+func (e *Executor[T, R]) Seed(id int, task T) {
+	e.TaskChan <- Payload[T]{ID: id, Value: task}
+}
+
+// StartAsync 异步启动调度器，任务输入和结果消费由外部控制
+// 外部通过 Seed 注入任务，通过 Collect 消费结果
+// 完成后需调用 WaitAsync 进行清理
+func (e *Executor[T, R]) StartAsync() {
+	e.wg.Add(1)
+	defer e.wg.Done()
+
+	e.logInlet.StartExecutor(e.Name, 0)
+	startTime := time.Now()
+
+	e.notifyStart()
+
+	e.dispatch()
+
+	e.notifyFinish()
+
+	e.logInlet.EndExecutor(e.Name, time.Since(startTime).Seconds(), e.GetSuccess(), e.GetFailed())
+}
+
+// WaitAsync 等待异步执行器结束并清理资源
+// 调用前需先发送 ControlSignal 通知输入结束
+func (e *Executor[T, R]) WaitAsync() {
+	e.wg.Wait()
 }

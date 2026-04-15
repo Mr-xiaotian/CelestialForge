@@ -28,10 +28,18 @@ func (c *Counter) GetTotal() int {
 	return c.total
 }
 
-func (c *Counter) GetComplated() int {
-	return int(c.success.Load() + c.failed.Load())
+func (c *Counter) GetSuccess() int {
+	return int(c.success.Load())
+}
+
+func (c *Counter) GetFailed() int {
+	return int(c.failed.Load())
+}
+
+func (c *Counter) GetCompleted() int {
+	return c.GetSuccess() + c.GetFailed()
 }
 
 func (c *Counter) IsFinish() bool {
-	return c.GetComplated() == c.GetTotal()
+	return c.GetCompleted() == c.GetTotal()
 }

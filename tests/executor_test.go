@@ -21,8 +21,8 @@ func TestExecutor_AllError(t *testing.T) {
 		t.Errorf("unexpected success: %v", res)
 	}
 
-	if executor.GetComplated() != len(tasks) {
-		t.Errorf("expected %d completed, got %d", len(tasks), executor.GetComplated())
+	if executor.GetCompleted() != len(tasks) {
+		t.Errorf("expected %d completed, got %d", len(tasks), executor.GetCompleted())
 	}
 	if int(executor.State()) != 2 {
 		t.Errorf("expected state 2 (done), got %d", executor.State())
@@ -53,8 +53,8 @@ func TestExecutor_PartialError(t *testing.T) {
 	if successCount != 3 {
 		t.Errorf("expected 3 successes, got %d", successCount)
 	}
-	if executor.GetComplated() != len(tasks) {
-		t.Errorf("expected %d completed, got %d", len(tasks), executor.GetComplated())
+	if executor.GetCompleted() != len(tasks) {
+		t.Errorf("expected %d completed, got %d", len(tasks), executor.GetCompleted())
 	}
 }
 
