@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+// FormatTable 将二维字符串数据格式化为对齐的纯文本表格。
+// columns 为表头列名，自动计算各列宽度。
 func FormatTable(data [][]string, columns []string) string {
 	widths := make([]int, len(columns))
 	for i, col := range columns {

@@ -9,6 +9,9 @@ import (
 	"github.com/Mr-xiaotian/CelestialForge/pkg/funnel"
 )
 
+// ==== Record ====
+
+// FailRecord 失败记录条目，序列化为 JSONL 写入文件。
 type FailRecord[T any] struct {
 	FormatTime   string
 	ExecutorName string
@@ -17,11 +20,15 @@ type FailRecord[T any] struct {
 	ErrorMessage string
 }
 
+// ==== Spout (RecordHandler) ====
+
+// FailRecordHandler 失败记录的 RecordHandler 实现，将失败信息以 JSONL 格式写入文件。
 type FailRecordHandler[T any] struct {
 	FailPath string
 	FailFile *os.File
 }
 
+// BeforeStart 创建 fallback 目录并打开 JSONL 文件。
 func (f *FailRecordHandler[T]) BeforeStart() error {
 	var err error
 
@@ -40,6 +47,7 @@ func (f *FailRecordHandler[T]) BeforeStart() error {
 	return nil
 }
 
+// HandleRecord 将失败记录序列化为 JSON 并追加写入文件。
 func (f *FailRecordHandler[T]) HandleRecord(record FailRecord[T]) error {
 	var err error
 	var b []byte
@@ -57,6 +65,7 @@ func (f *FailRecordHandler[T]) HandleRecord(record FailRecord[T]) error {
 	return err
 }
 
+// AfterStop 关闭 JSONL 文件。
 func (f *FailRecordHandler[T]) AfterStop() error {
 	err := f.FailFile.Close()
 	if err != nil {
@@ -66,17 +75,21 @@ func (f *FailRecordHandler[T]) AfterStop() error {
 	return nil
 }
 
-// FailInlet 失败记录生产端，内嵌 Inlet 并提供领域方法
+// ==== Inlet ====
+
+// FailInlet 失败记录生产端，内嵌 Inlet 并提供领域方法。
 type FailInlet[T any] struct {
 	funnel.Inlet[FailRecord[T]]
 }
 
+// NewFailInlet 创建 FailInlet，绑定到指定的写通道。
 func NewFailInlet[T any](ch chan<- FailRecord[T], timeout time.Duration) *FailInlet[T] {
 	return &FailInlet[T]{
 		Inlet: *funnel.NewInlet(ch, timeout),
 	}
 }
 
+// TaskError 发送一条任务失败记录。
 func (f *FailInlet[T]) TaskError(executorName string, taskID int, task T, err error) {
 	f.Send(FailRecord[T]{
 		FormatTime:   time.Now().Format("2006-01-02 15:04:05"),

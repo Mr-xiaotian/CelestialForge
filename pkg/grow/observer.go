@@ -9,18 +9,21 @@ import (
 	"github.com/schollz/progressbar/v3"
 )
 
+// Observer 任务执行生命周期观察者接口。
 type Observer interface {
 	OnStart(total int)
 	OnProgress(completed, total int)
 	OnFinish(completed, total int)
 }
 
+// ProgressBar 基于 progressbar/v3 的 Observer 实现，在终端显示进度条。
 type ProgressBar struct {
 	description string
 	bar         *progressbar.ProgressBar
 	mu          sync.Mutex
 }
 
+// NewProgressBar 创建一个带描述文本的进度条。
 func NewProgressBar(description string) *ProgressBar {
 	return &ProgressBar{description: description}
 }

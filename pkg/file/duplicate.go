@@ -10,7 +10,9 @@ import (
 	"github.com/Mr-xiaotian/CelestialForge/pkg/units"
 )
 
-// func
+// ==== Pipeline Stages ====
+
+// getSizeDuplicate 按文件大小分组，返回存在大小重复的文件路径。
 func getSizeDuplicate(fileInfoMap FileInfoMap) []string {
 	fileSizeMap := make(map[units.HumanBytes][]string)
 	for path, fileInfo := range fileInfoMap {
@@ -28,6 +30,7 @@ func getSizeDuplicate(fileInfoMap FileInfoMap) []string {
 	return fileSizeDuplicates
 }
 
+// getSnapshotDuplicate 用文件前 4KB 的快照哈希进一步过滤重复候选。
 func getSnapshotDuplicate(fileSizeDuplicates []string, numWorkers int) ([]string, error) {
 	// 并行计算文件hash
 	executor := grow.NewExecutor("SnapshotExecutor", GetFileSnapshotSHA1, numWorkers, grow.NewProgressBar("Snapshoting files"))
@@ -50,6 +53,7 @@ func getSnapshotDuplicate(fileSizeDuplicates []string, numWorkers int) ([]string
 	return fileSnapshotDuplicates, nil
 }
 
+// getHashDuplicate 用完整文件哈希确认最终重复文件。
 func getHashDuplicate(fileSnapshotDuplicates []string, fileInfoMap FileInfoMap, numWorkers int) (map[FileInfo][]string, error) {
 	// 并行计算文件hash
 	executor := grow.NewExecutor("HashExecutor", GetFileSHA1, numWorkers, grow.NewProgressBar("Hashing files"))
@@ -73,6 +77,10 @@ func getHashDuplicate(fileSnapshotDuplicates []string, fileInfoMap FileInfoMap, 
 	return fileHashDuplicates, nil
 }
 
+// ==== Public API ====
+
+// ScanDuplicateFile 扫描目录下的重复文件。
+// 通过三级过滤（大小 -> 快照哈希 -> 完整哈希）逐步缩小候选集。
 func ScanDuplicateFile(path string, numWorkers int) (map[FileInfo][]string, error) {
 	fileInfoMap, err := GetFilesInfoRecursive(path)
 	if err != nil {
@@ -95,6 +103,8 @@ func ScanDuplicateFile(path string, numWorkers int) (map[FileInfo][]string, erro
 
 	return fileHashDuplicates, nil
 }
+
+// ==== Report ====
 
 // DuplicateReport 生成重复文件的详细报告
 func DuplicateReport(identicalMap map[FileInfo][]string) string {

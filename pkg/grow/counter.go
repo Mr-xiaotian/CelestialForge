@@ -2,6 +2,7 @@ package grow
 
 import "sync/atomic"
 
+// Counter 并发安全的任务计数器，跟踪总数、成功数和失败数。
 type Counter struct {
 	total   int
 	success atomic.Int64

@@ -9,6 +9,9 @@ import (
 	"github.com/Mr-xiaotian/CelestialForge/pkg/funnel"
 )
 
+// Executor 并发任务执行器。将一组任务分发给 worker 池并行处理，
+// 通过 funnel 系统记录日志和失败信息。
+// T 为输入任务类型，R 为输出结果类型。
 type Executor[T any, R any] struct {
 	Name       string
 	processor  func(T) (R, error)
@@ -29,6 +32,7 @@ type Executor[T any, R any] struct {
 	Counter
 }
 
+// State 返回执行器当前状态：0=idle, 1=running, 2=done。
 func (e *Executor[T, R]) State() int32 {
 	return e.state.Load()
 }
@@ -56,6 +60,8 @@ func NewExecutor[T any, R any](name string, processor func(T) (R, error), numWor
 		failInlet: failInlet,
 	}
 }
+
+// ==== Observer Hooks ====
 
 // reportProgress 报告进度
 func (e *Executor[T, R]) reportProgress() {
@@ -85,6 +91,8 @@ func (e *Executor[T, R]) notifyFinish() {
 	}
 }
 
+// ==== Task Handling ====
+
 // processTaskSuccess 处理成功任务
 func (e *Executor[T, R]) processTaskSuccess(taskPayload Payload[T], result R, startTime time.Time) {
 	e.AddSuccess(1)
@@ -107,6 +115,8 @@ func (e *Executor[T, R]) handleTaskError(taskPayload Payload[T], err error) {
 	e.logInlet.TaskError(e.Name, taskRepr, err)
 	e.failInlet.TaskError(e.Name, taskPayload.ID, taskPayload.Value, err)
 }
+
+// ==== Internal Pipeline ====
 
 // seed 内部批量注入任务
 func (e *Executor[T, R]) seed(tasks []T) {
@@ -177,7 +187,9 @@ func (e *Executor[T, R]) collect() []TaskResult[T, R] {
 	return results
 }
 
-// Start 启动执行器
+// ==== Sync API ====
+
+// Start 同步启动执行器，阻塞直到所有任务完成并返回结果。
 func (e *Executor[T, R]) Start(tasks []T) []TaskResult[T, R] {
 	e.logSpout.Start()
 	e.failSpout.Start()
@@ -199,7 +211,9 @@ func (e *Executor[T, R]) Start(tasks []T) []TaskResult[T, R] {
 	return results
 }
 
-// Collect 消费成功结果，直到执行器结束
+// ==== Async API ====
+
+// Collect 逐条消费成功结果，阻塞直到 ResultChan 关闭。
 func (e *Executor[T, R]) Collect(onSuccess func(Payload[R])) {
 	for res := range e.ResultChan {
 		if onSuccess != nil {
@@ -208,7 +222,7 @@ func (e *Executor[T, R]) Collect(onSuccess func(Payload[R])) {
 	}
 }
 
-// Seed 外部注入单个任务
+// Seed 外部注入单个任务到 TaskChan。
 func (e *Executor[T, R]) Seed(id int, task T) {
 	e.TaskChan <- Payload[T]{ID: id, Value: task}
 }
