@@ -92,16 +92,15 @@ func TestExecutor_Async(t *testing.T) {
 	}
 
 	executor := grow.NewExecutor("test_async", processor, 3)
-	executor.SetTotal(5)
+	results := map[int]int{}
 
 	go executor.StartAsync()
 
 	for task := range 5 {
 		executor.Seed(task, task)
 	}
-	executor.ControlChan <- grow.ControlSignal{Source: "test"}
+	executor.Seal()
 
-	results := map[int]int{}
 	executor.Collect(func(res grow.Payload[int]) {
 		results[res.Prev.(int)] = res.Value
 	})

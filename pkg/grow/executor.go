@@ -120,6 +120,7 @@ func (e *Executor[T, R]) handleTaskError(taskPayload Payload[T], err error) {
 
 // seed 内部批量注入任务
 func (e *Executor[T, R]) seed(tasks []T) {
+	e.AddTotal(len(tasks))
 	for idx, task := range tasks {
 		e.TaskChan <- Payload[T]{ID: idx, Value: task}
 	}
@@ -196,13 +197,10 @@ func (e *Executor[T, R]) Start(tasks []T) []TaskResult[T, R] {
 	e.logInlet.StartExecutor(e.Name, len(tasks))
 	startTime := time.Now()
 
-	e.SetTotal(len(tasks))
 	e.notifyStart()
-
 	go e.seed(tasks)
 	go e.dispatch()
 	results := e.collect()
-
 	e.notifyFinish()
 
 	e.logInlet.EndExecutor(e.Name, time.Since(startTime).Seconds(), e.GetSuccess(), e.GetFailed())
@@ -215,6 +213,7 @@ func (e *Executor[T, R]) Start(tasks []T) []TaskResult[T, R] {
 
 // Seed 外部注入单个任务到 TaskChan。
 func (e *Executor[T, R]) Seed(id int, task T) {
+	e.AddTotal(1)
 	e.TaskChan <- Payload[T]{ID: id, Value: task}
 }
 
@@ -238,16 +237,18 @@ func (e *Executor[T, R]) StartAsync() {
 	startTime := time.Now()
 
 	e.notifyStart()
-
 	e.dispatch()
-
 	e.notifyFinish()
 
 	e.logInlet.EndExecutor(e.Name, time.Since(startTime).Seconds(), e.GetSuccess(), e.GetFailed())
 }
 
+// Seal 封闭任务输入，通知 dispatch 不再有新任务。
+func (e *Executor[T, R]) Seal() {
+	e.ControlChan <- ControlSignal{Source: e.Name}
+}
+
 // WaitAsync 等待异步执行器结束并清理资源
-// 调用前需先发送 ControlSignal 通知输入结束
 func (e *Executor[T, R]) WaitAsync() {
 	e.wg.Wait()
 }
