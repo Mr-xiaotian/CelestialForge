@@ -213,6 +213,11 @@ func (e *Executor[T, R]) Start(tasks []T) []TaskResult[T, R] {
 
 // ==== Async API ====
 
+// Seed 外部注入单个任务到 TaskChan。
+func (e *Executor[T, R]) Seed(id int, task T) {
+	e.TaskChan <- Payload[T]{ID: id, Value: task}
+}
+
 // Collect 逐条消费成功结果，阻塞直到 ResultChan 关闭。
 func (e *Executor[T, R]) Collect(onSuccess func(Payload[R])) {
 	for res := range e.ResultChan {
@@ -220,11 +225,6 @@ func (e *Executor[T, R]) Collect(onSuccess func(Payload[R])) {
 			onSuccess(res)
 		}
 	}
-}
-
-// Seed 外部注入单个任务到 TaskChan。
-func (e *Executor[T, R]) Seed(id int, task T) {
-	e.TaskChan <- Payload[T]{ID: id, Value: task}
 }
 
 // StartAsync 异步启动调度器，任务输入和结果消费由外部控制

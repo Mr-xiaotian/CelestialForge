@@ -85,3 +85,33 @@ func TestExecutor_AllSuccess(t *testing.T) {
 		t.Errorf("expected state 2 (done), got %d", executor.State())
 	}
 }
+
+func TestExecutor_Async(t *testing.T) {
+	processor := func(task int) (int, error) {
+		return task * 2, nil
+	}
+
+	executor := grow.NewExecutor("test_async", processor, 3)
+	executor.SetTotal(5)
+
+	go executor.StartAsync()
+
+	for task := range 5 {
+		executor.Seed(task, task)
+	}
+	executor.ControlChan <- grow.ControlSignal{Source: "test"}
+
+	results := map[int]int{}
+	executor.Collect(func(res grow.Payload[int]) {
+		results[res.Prev.(int)] = res.Value
+	})
+
+	executor.WaitAsync()
+
+	if len(results) != 5 {
+		t.Errorf("expected 5 results, got %d", len(results))
+	}
+	if int(executor.State()) != 2 {
+		t.Errorf("expected state 2 (done), got %d", executor.State())
+	}
+}
