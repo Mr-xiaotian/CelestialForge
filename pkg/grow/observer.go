@@ -29,7 +29,7 @@ func NewProgressBar(description string) *ProgressBar {
 }
 
 func (p *ProgressBar) ensureBar(total int) {
-	if p.bar != nil {
+	if total == 0 || p.bar != nil {
 		return
 	}
 	p.bar = progressbar.NewOptions64(
