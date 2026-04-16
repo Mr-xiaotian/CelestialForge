@@ -9,9 +9,9 @@ import (
 // Inlet 生产端，向通道写入记录。支持上下文取消和超时控制。
 type Inlet[T any] struct {
 	ch      chan<- T
+	timeout time.Duration
 	ctx     context.Context
 	cancel  context.CancelFunc
-	timeout time.Duration
 }
 
 // NewInlet 创建一个 Inlet，绑定到指定的写通道，超时后 Send 将返回错误。

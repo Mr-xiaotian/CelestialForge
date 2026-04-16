@@ -1,6 +1,7 @@
 package grow
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -16,7 +17,6 @@ type Plot[T any, R any] struct {
 	Name       string
 	cultivator func(T) (R, error)
 	numWorkers int
-	wg         sync.WaitGroup
 
 	SeedChan    chan Payload[T]
 	FruitChan   chan Payload[R]
@@ -28,7 +28,10 @@ type Plot[T any, R any] struct {
 	failSpout *funnel.Spout[FailRecord[T]]
 	failInlet *FailInlet[T]
 
-	state atomic.Int32 // 0=idle, 1=running, 2=done
+	wg     sync.WaitGroup
+	ctx    context.Context
+	cancel context.CancelFunc
+	state  atomic.Int32 // 0=idle, 1=running, 2=done
 	Counter
 }
 
@@ -44,6 +47,7 @@ func NewPlot[T any, R any](name string, cultivator func(T) (R, error), numWorker
 	logInlet := NewLogInlet(logSpout.GetQueue(), time.Second, "INFO")
 	failSpout := funnel.NewSpout(&FailRecordHandler[T]{}, 100, time.Second)
 	failInlet := NewFailInlet(failSpout.GetQueue(), time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 
 	return &Plot[T, R]{
 		Name:       name,
@@ -59,6 +63,9 @@ func NewPlot[T any, R any](name string, cultivator func(T) (R, error), numWorker
 		logInlet:  logInlet,
 		failSpout: failSpout,
 		failInlet: failInlet,
+
+		ctx:    ctx,
+		cancel: cancel,
 	}
 }
 
@@ -152,10 +159,11 @@ func (e *Plot[T, R]) sprout() {
 	sem := make(chan struct{}, e.numWorkers)  // 控制并发数
 	done := make(chan struct{}, e.numWorkers) // 控制tend完成信号
 
+	ctxCancel := false
 	inputClosed := false
 	inFlight := 0
 	shouldFinish := func() bool {
-		return inputClosed && inFlight == 0 && e.IsFinish()
+		return ctxCancel || (inputClosed && inFlight == 0 && e.IsFinish())
 	}
 
 	for {
@@ -173,6 +181,8 @@ func (e *Plot[T, R]) sprout() {
 			inFlight--
 		case <-e.ControlChan:
 			inputClosed = true
+		case <-e.ctx.Done():
+			ctxCancel = true
 		}
 	}
 }
@@ -195,19 +205,19 @@ func (e *Plot[T, R]) harvest() []Karma[T, R] {
 func (e *Plot[T, R]) Start(tasks []T) []Karma[T, R] {
 	e.logSpout.Start()
 	e.failSpout.Start()
-	e.logInlet.StartPlot(e.Name, len(tasks))
+	e.logInlet.StartPlot(e.Name, e.numWorkers)
 	startTime := time.Now()
 
 	e.notifyStart()
 	go e.seed(tasks)
 	go e.sprout()
-	results := e.harvest()
+	karmas := e.harvest()
 	e.notifyFinish()
 
 	e.logInlet.EndPlot(e.Name, time.Since(startTime).Seconds(), e.GetSuccess(), e.GetFailed())
 	e.logSpout.Stop()
 	e.failSpout.Stop()
-	return results
+	return karmas
 }
 
 // ==== Async API ====
@@ -234,7 +244,7 @@ func (e *Plot[T, R]) StartAsync() {
 	e.wg.Add(1)
 	defer e.wg.Done()
 
-	e.logInlet.StartPlot(e.Name, 0)
+	e.logInlet.StartPlot(e.Name, e.numWorkers)
 	startTime := time.Now()
 
 	e.notifyStart()
@@ -252,4 +262,12 @@ func (e *Plot[T, R]) Seal() {
 // WaitAsync 等待异步 Plot 结束并清理资源
 func (e *Plot[T, R]) WaitAsync() {
 	e.wg.Wait()
+}
+
+// ==== Cleanup API ====
+
+// Close 立即取消 Plot，强制停止所有操作。慎用，可能导致未完成的任务丢失。
+func (e *Plot[T, R]) Close() {
+	e.cancel()
+	e.notifyFinish()
 }

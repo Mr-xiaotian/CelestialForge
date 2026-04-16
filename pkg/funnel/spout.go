@@ -22,10 +22,10 @@ type RecordHandler[T any] interface {
 type Spout[T any] struct {
 	// 状态字段
 	ch      chan T
-	ctx     context.Context
-	cancel  context.CancelFunc
 	wg      sync.WaitGroup
 	timeout time.Duration
+	ctx     context.Context
+	cancel  context.CancelFunc
 
 	// 依赖：具体的处理逻辑（接口注入）
 	handler RecordHandler[T]
