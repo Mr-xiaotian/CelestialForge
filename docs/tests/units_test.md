@@ -1,14 +1,16 @@
-# tests.TestHumanTime
+# units 包测试
 
-> 源文件: `tests/units_test.go`
+> 源文件: `pkg/units/time_test.go`
 
 ## 概述
 
-`units.HumanTime` 时间格式化功能的测试套件。采用表驱动测试模式，验证秒数到人类可读时间字符串的转换是否正确。测试覆盖了零值、常规值和较大值等多种输入场景，确保格式化输出符合预期的 "Xm Ys" 格式规范。
+`units.HumanTime` 时间格式化功能的测试套件，采用黑盒测试（`package units_test`）。使用表驱动测试模式，验证秒数到人类可读时间字符串的转换是否正确。
 
-## 类型/函数
+## 测试文件
 
-### `TestHumanTime(t *testing.T)`
+### `time_test.go`
+
+#### `TestHumanTime(t *testing.T)`
 
 表驱动测试，验证 `units.NewHumanTime().String()` 的输出格式。
 
@@ -24,16 +26,11 @@
 ## 使用示例
 
 ```bash
-# 运行时间格式化测试
-go test -v -run TestHumanTime ./tests/
-
-# 运行所有 units 相关测试
-go test -v -run "HumanTime|HumanBytes" ./tests/
+# 运行 units 包测试
+go test -v ./pkg/units/
 ```
 
 ## 关联文件
 
-- [executor_test.md](executor_test.md) — 同一测试包中的执行器测试
-- [file_test.md](file_test.md) — 同一测试包中的文件操作测试
-- [structs_test.md](structs_test.md) — 同一测试包中的数据结构测试
-- [../cmd/debug/main.md](../cmd/debug/main.md) — debug_bytes 函数提供 HumanBytes 的手动调试
+- [file_test.md](file_test.md) — file 包测试
+- [structs_test.md](structs_test.md) — structs 包测试

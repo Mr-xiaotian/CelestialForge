@@ -4,7 +4,7 @@
 
 ## 概述
 
-`log.go` 实现了 `Executor` 的结构化日志系统，基于 `funnel` 包的生产者-消费者模式异步写入日志文件。日志系统支持多级别过滤（TRACE/DEBUG/INFO/SUCCESS/WARNING/ERROR），并提供针对 `Executor` 生命周期事件的便捷日志方法。日志通过 `LogInlet`（生产端）写入通道，由 `LogRecordHandler`（消费端）格式化后持久化到磁盘。
+`log.go` 实现了 `Plot` 的结构化日志系统，基于 `funnel` 包的生产者-消费者模式异步写入日志文件。日志系统支持多级别过滤（TRACE/DEBUG/INFO/SUCCESS/WARNING/ERROR），并提供针对 `Plot` 生命周期事件的便捷日志方法。日志通过 `LogInlet`（生产端）写入通道，由 `LogRecordHandler`（消费端）格式化后持久化到磁盘。
 
 ## 常量
 
@@ -50,7 +50,7 @@
 
 ### `LogInlet`
 
-日志的生产端入口，封装了 `funnel.Inlet[LogRecord]`，提供面向 `Executor` 的高层日志方法。
+日志的生产端入口，封装了 `funnel.Inlet[LogRecord]`，提供面向 `Plot` 的高层日志方法。
 
 | 字段       | 类型                      | 说明                                       |
 | ---------- | ------------------------- | ------------------------------------------ |
@@ -69,47 +69,47 @@
 
 内部日志方法。检查 `level` 是否达到 `minLevel`，如果达到则构造 `LogRecord` 并通过 `Inlet` 发送到通道。
 
-##### `StartExecutor(name string, n int)`
+##### `StartPlot(plotName string, numTends int)`
 
-记录 Executor 启动事件。级别为 INFO，包含 Executor 名称和 tend 数量。
+记录 Plot 启动事件。级别为 INFO，包含 Plot 名称和 tend 数量。
 
-##### `EndExecutor(name string, useTime float64, success, failed int)`
+##### `EndPlot(plotName string, useTime float64, success, failed int)`
 
-记录 Executor 结束事件。级别为 INFO，包含耗时、成功数和失败数统计。
+记录 Plot 结束事件。级别为 INFO，包含耗时、成功数和失败数统计。
 
-##### `TaskSuccess(name, taskRepr, resultRepr string, useTime float64)`
+##### `SeedSuccess(plotName, seedRepr, fruitRepr string, useTime float64)`
 
-记录单个任务成功完成。级别为 SUCCESS，包含任务和结果的字符串表示（经 `trunc` 截断）。
+记录单颗种子培育成功。级别为 SUCCESS，包含种子和果实的字符串表示（经 `trunc` 截断）。
 
-##### `TaskError(name, taskRepr string, err error)`
+##### `SeedError(plotName, seedRepr string, err error)`
 
-记录单个任务执行失败。级别为 ERROR，包含任务的字符串表示和错误信息。
+记录单颗种子培育失败。级别为 ERROR，包含种子的字符串表示和错误信息。
 
 ## 使用示例
 
 ```go
-// 日志系统由 Executor 内部自动初始化和管理
+// 日志系统由 Plot 内部自动初始化和管理
 // 以下展示其内部工作原理
 
 ch := make(chan grow.LogRecord, 100)
 
 // 消费端
-handler := &grow.LogRecordHandler{LogPath: "logs/executor.log"}
+handler := &grow.LogRecordHandler{LogPath: "logs/plot.log"}
 spout := funnel.NewSpout(ch, handler)
 
 // 生产端
 inlet := grow.NewLogInlet(ch, 5*time.Second, "INFO")
 
-// Executor 生命周期日志
-inlet.StartExecutor("file-hasher", 8)
-inlet.TaskSuccess("file-hasher", "file_a.txt", "abc123...", 0.35)
-inlet.TaskError("file-hasher", "file_b.txt", errors.New("permission denied"))
-inlet.EndExecutor("file-hasher", 12.5, 99, 1)
+// Plot 生命周期日志
+inlet.StartPlot("file-hasher", 8)
+inlet.SeedSuccess("file-hasher", "file_a.txt", "abc123...", 0.35)
+inlet.SeedError("file-hasher", "file_b.txt", errors.New("permission denied"))
+inlet.EndPlot("file-hasher", 12.5, 99, 1)
 ```
 
 ## 关联文件
 
-- [executor.md](executor.md) — `Executor` 在内部创建日志通道、`LogInlet` 和 `LogRecordHandler`，并在任务处理过程中调用日志方法
-- [helper.md](helper.md) — `trunc` 函数用于截断 `taskRepr` 和 `resultRepr`
+- [plot.md](plot.md) — `Plot` 在内部创建日志通道、`LogInlet` 和 `LogRecordHandler`，并在种子培育过程中调用日志方法
+- [helper.md](helper.md) — `trunc` 函数用于截断 `seedRepr` 和 `fruitRepr`
 - [../../funnel/inlet.md](../../funnel/inlet.md) — `LogInlet` 嵌入了 `funnel.Inlet`，用于异步发送日志记录
 - [../../funnel/spout.md](../../funnel/spout.md) — `LogRecordHandler` 实现了 `funnel.RecordHandler` 接口，由 `funnel.Spout` 驱动消费

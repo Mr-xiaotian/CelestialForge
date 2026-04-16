@@ -4,15 +4,15 @@
 
 ## 概述
 
-`helper.go` 提供了 `grow` 包内部使用的工具函数。目前包含字符串截断函数 `trunc`，用于在日志和失败记录中将过长的任务/结果文本表示截短为可读长度，避免日志文件过于膨胀。
+`helper.go` 提供了 `grow` 包内部使用的工具函数。目前包含字符串截断函数 `trunc`，用于在日志和失败记录中将过长的种子/果实文本表示截短为可读长度，避免日志文件过于膨胀。
 
 ## 函数
 
 ### `trunc(s string, maxLen int) string`
 
-将字符串 `s` 截断到最大长度 `maxLen`。如果字符串长度未超过 `maxLen`，原样返回。
+将字符串 `s` 截断到最大长度 `maxLen`。如果字符串长度未超过 `maxLen`，原样返回。内部使用 `[]rune` 转换以正确处理中文等多字节字符。
 
-**截断策略**: 保留前 2/3 和后 1/3 的内容，中间用 `"..."` 连接。这种方式能同时保留字符串的开头（通常包含类型/标识信息）和结尾（通常包含关键数据），比单纯截断尾部更有利于调试。
+**截断策略**: 保留前 1/3 和后 1/3 的内容，中间用 `"..."` 连接。每段至少 1 个字符（通过 `max(1, maxLen/3)` 保证）。这种方式能同时保留字符串的开头（通常包含类型/标识信息）和结尾（通常包含关键数据），比单纯截断尾部更有利于调试。
 
 **参数**:
 - `s` — 待截断的字符串
@@ -26,13 +26,13 @@
 // 短字符串，原样返回
 trunc("hello", 100) // => "hello"
 
-// 长字符串，前2/3 + "..." + 后1/3
+// 长字符串，前1/3 + "..." + 后1/3
 trunc("abcdefghijklmnopqrstuvwxyz", 15)
-// => "abcdefghij...yz"  (前10 + "..." + 后2，总计15)
+// => "abcde...vwxyz"
 ```
 
 ## 关联文件
 
-- [executor.md](executor.md) — `processTaskSuccess` 和 `handleTaskError` 方法在生成日志和失败记录时使用 `trunc` 截断任务和结果的字符串表示
-- [log.md](log.md) — 日志中的 `taskRepr` 和 `resultRepr` 经过 `trunc` 处理
-- [fail.md](fail.md) — 失败记录中的任务描述经过 `trunc` 处理
+- [plot.md](plot.md) — `processFruit` 和 `handleWeed` 方法在生成日志和失败记录时使用 `trunc` 截断种子和果实的字符串表示
+- [log.md](log.md) — 日志中的 `seedRepr` 和 `fruitRepr` 经过 `trunc` 处理
+- [fail.md](fail.md) — 失败记录中的种子描述经过 `trunc` 处理

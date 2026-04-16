@@ -4,19 +4,19 @@
 
 ## 概述
 
-`observer.go` 定义了任务执行进度的观察者模式接口及其默认实现。`Observer` 接口提供了三个生命周期钩子，允许外部组件监听 `Executor` 的启动、进度更新和完成事件。包内提供了基于 `progressbar/v3` 的 `ProgressBar` 实现，在终端中以进度条形式实时展示任务处理进度。
+`observer.go` 定义了种子培育进度的观察者模式接口及其默认实现。`Observer` 接口提供了三个生命周期钩子，允许外部组件监听 `Plot` 的启动、进度更新和完成事件。包内提供了基于 `progressbar/v3` 的 `ProgressBar` 实现，在终端中以进度条形式实时展示种子培育进度。
 
 ## 类型
 
 ### `Observer` (interface)
 
-任务执行进度的观察者接口。可通过 `NewExecutor` 的可变参数注入一个或多个观察者。
+种子培育进度的观察者接口。通过 `NewPlot` 的 `observers` 参数注入。
 
-| 方法                                 | 说明                                             |
-| ------------------------------------ | ------------------------------------------------ |
-| `OnStart(total int)`                | 当 `Executor` 开始执行时调用，传入任务总数       |
-| `OnProgress(completed, total int)`  | 每当一个任务完成（成功或失败）时调用             |
-| `OnFinish(completed, total int)`    | 当所有任务执行完毕时调用                         |
+| 方法                                 | 说明                                         |
+| ------------------------------------ | -------------------------------------------- |
+| `OnStart(total int)`                | 当 `Plot` 开始执行时调用，传入种子总数       |
+| `OnProgress(completed, total int)`  | 每当一颗种子完成培育（成功或失败）时调用     |
+| `OnFinish(completed, total int)`    | 当所有种子培育完毕时调用                     |
 
 ### `ProgressBar`
 
@@ -47,8 +47,10 @@
 ```go
 // 使用内置进度条
 bar := grow.NewProgressBar("Processing files")
-executor := grow.NewExecutor("hasher", hashFunc, 8, bar)
-executor.Start(files)
+plot := grow.NewPlot("hasher", hashFunc, []grow.Observer{bar},
+    grow.WithTends(8),
+)
+plot.Start(files)
 
 // 自定义 Observer 实现
 type MetricsObserver struct {
@@ -57,23 +59,26 @@ type MetricsObserver struct {
 
 func (m *MetricsObserver) OnStart(total int) {
     m.startTime = time.Now()
-    log.Printf("Starting %d tasks", total)
+    log.Printf("Starting %d seeds", total)
 }
 
 func (m *MetricsObserver) OnProgress(completed, total int) {
     elapsed := time.Since(m.startTime)
     rate := float64(completed) / elapsed.Seconds()
-    log.Printf("%.1f tasks/sec", rate)
+    log.Printf("%.1f seeds/sec", rate)
 }
 
 func (m *MetricsObserver) OnFinish(completed, total int) {
-    log.Printf("Finished %d tasks in %v", completed, time.Since(m.startTime))
+    log.Printf("Finished %d seeds in %v", completed, time.Since(m.startTime))
 }
 
-executor := grow.NewExecutor("tend", processFunc, 4, bar, &MetricsObserver{})
+plot := grow.NewPlot("worker", processFunc,
+    []grow.Observer{bar, &MetricsObserver{}},
+    grow.WithTends(4),
+)
 ```
 
 ## 关联文件
 
-- [executor.md](executor.md) — `Executor` 在 `notifyStart`、`reportProgress`、`notifyFinish` 中依次调用所有注册的 `Observer`
+- [plot.md](plot.md) — `Plot` 在 `notifyStart`、`reportProgress`、`notifyFinish` 中依次调用所有注册的 `Observer`
 - [counter.md](counter.md) — `Counter` 提供 `GetCompleted` 和 `GetTotal` 数据供 `Observer` 回调使用
