@@ -6,18 +6,18 @@ import "runtime"
 type Option func(*plotOptions)
 
 type plotOptions struct {
-	numWorkers int
+	numTends int
 }
 
 func defaultOptions() plotOptions {
 	return plotOptions{
-		numWorkers: runtime.NumCPU(),
+		numTends: runtime.NumCPU(),
 	}
 }
 
-// WithWorkers 设置并发工作协程数。默认为 runtime.NumCPU()。
-func WithWorkers(n int) Option {
+// WithTends 设置并发工作协程数。默认为 runtime.NumCPU()。
+func WithTends(n int) Option {
 	return func(o *plotOptions) {
-		o.numWorkers = n
+		o.numTends = n
 	}
 }

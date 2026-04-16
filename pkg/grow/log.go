@@ -108,8 +108,8 @@ func (l *LogInlet) log(level string, message string) {
 }
 
 // StartPlot 记录 Plot 启动日志。
-func (l *LogInlet) StartPlot(plotName string, numWorkers int) {
-	l.log("INFO", fmt.Sprintf("'%s' start by %d workers.", plotName, numWorkers))
+func (l *LogInlet) StartPlot(plotName string, numTends int) {
+	l.log("INFO", fmt.Sprintf("'%s' start by %d tends.", plotName, numTends))
 }
 
 // EndPlot 记录 Plot 结束日志。

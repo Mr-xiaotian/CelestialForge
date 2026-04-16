@@ -11,12 +11,12 @@ import (
 func main() {
 	scanPath := flag.String("scan-path", "", "path to scan")
 	outputPath := flag.String("output-path", "duplicate_report.txt", "output file path")
-	numWorkers := flag.Int("num-workers", 4, "number of workers to use")
+	numTends := flag.Int("num-tends", 4, "number of tends to use")
 	flag.Parse()
 
 	var err error
 
-	identicalMap, err := file.ScanDuplicateFile(*scanPath, *numWorkers)
+	identicalMap, err := file.ScanDuplicateFile(*scanPath, *numTends)
 	if err != nil {
 		fmt.Println("Error scanning duplicate files:", err)
 		return

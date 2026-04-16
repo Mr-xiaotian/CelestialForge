@@ -22,7 +22,7 @@
 |------|------|--------|------|
 | `--scan-path` | string | `""` (必填) | 要扫描的目录路径 |
 | `--output-path` | string | `duplicate_report.txt` | 报告输出文件路径 |
-| `--num-workers` | int | `4` | 并发工作线程数 |
+| `--num-tends` | int | `4` | 并发工作线程数 |
 
 ## 使用示例
 
@@ -34,11 +34,11 @@ go run cmd/duplicate/main.go --scan-path /path/to/scan
 go run cmd/duplicate/main.go \
   --scan-path /path/to/scan \
   --output-path result.txt \
-  --num-workers 8
+  --num-tends 8
 
 # 编译后运行
 go build -o duplicate cmd/duplicate/main.go
-./duplicate --scan-path /data/photos --num-workers 16
+./duplicate --scan-path /data/photos --num-tends 16
 ```
 
 ## 关联文件

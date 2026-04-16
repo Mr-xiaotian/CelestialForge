@@ -31,9 +31,9 @@ func getSizeDuplicate(fileInfoMap FileInfoMap) []string {
 }
 
 // getSnapshotDuplicate 用文件前 4KB 的快照哈希进一步过滤重复候选。
-func getSnapshotDuplicate(fileSizeDuplicates []string, numWorkers int) ([]string, error) {
+func getSnapshotDuplicate(fileSizeDuplicates []string, numTends int) ([]string, error) {
 	// 并行计算文件hash
-	plot := grow.NewPlot("SnapshotPlot", GetFileSnapshotSHA1, []grow.Observer{grow.NewProgressBar("Snapshoting files")}, grow.WithWorkers(numWorkers))
+	plot := grow.NewPlot("SnapshotPlot", GetFileSnapshotSHA1, []grow.Observer{grow.NewProgressBar("Snapshoting files")}, grow.WithTends(numTends))
 	results := plot.Start(fileSizeDuplicates)
 
 	// 收集结果
@@ -54,9 +54,9 @@ func getSnapshotDuplicate(fileSizeDuplicates []string, numWorkers int) ([]string
 }
 
 // getHashDuplicate 用完整文件哈希确认最终重复文件。
-func getHashDuplicate(fileSnapshotDuplicates []string, fileInfoMap FileInfoMap, numWorkers int) (map[FileInfo][]string, error) {
+func getHashDuplicate(fileSnapshotDuplicates []string, fileInfoMap FileInfoMap, numTends int) (map[FileInfo][]string, error) {
 	// 并行计算文件hash
-	plot := grow.NewPlot("HashPlot", GetFileSHA1, []grow.Observer{grow.NewProgressBar("Hashing files")}, grow.WithWorkers(numWorkers))
+	plot := grow.NewPlot("HashPlot", GetFileSHA1, []grow.Observer{grow.NewProgressBar("Hashing files")}, grow.WithTends(numTends))
 	results := plot.Start(fileSnapshotDuplicates)
 
 	// 收集结果
@@ -81,7 +81,7 @@ func getHashDuplicate(fileSnapshotDuplicates []string, fileInfoMap FileInfoMap, 
 
 // ScanDuplicateFile 扫描目录下的重复文件。
 // 通过三级过滤（大小 -> 快照哈希 -> 完整哈希）逐步缩小候选集。
-func ScanDuplicateFile(path string, numWorkers int) (map[FileInfo][]string, error) {
+func ScanDuplicateFile(path string, numTends int) (map[FileInfo][]string, error) {
 	fileInfoMap, err := GetFilesInfoRecursive(path)
 	if err != nil {
 		return nil, err
@@ -90,13 +90,13 @@ func ScanDuplicateFile(path string, numWorkers int) (map[FileInfo][]string, erro
 	fileSizeDuplicates := getSizeDuplicate(fileInfoMap)
 
 	// 利用短hash(4KB)来进行二次判断
-	fileSnapshotDuplicates, err := getSnapshotDuplicate(fileSizeDuplicates, numWorkers)
+	fileSnapshotDuplicates, err := getSnapshotDuplicate(fileSizeDuplicates, numTends)
 	if err != nil {
 		return nil, err
 	}
 
 	// 利用hash来进行三次判断
-	fileHashDuplicates, err := getHashDuplicate(fileSnapshotDuplicates, fileInfoMap, numWorkers)
+	fileHashDuplicates, err := getHashDuplicate(fileSnapshotDuplicates, fileInfoMap, numTends)
 	if err != nil {
 		return nil, err
 	}

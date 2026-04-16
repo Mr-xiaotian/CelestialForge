@@ -4,7 +4,7 @@
 
 ## 概述
 
-`executor.go` 是 `grow` 包的核心文件，实现了一个泛型并发任务执行器。`Executor` 采用生产者-消费者模式，通过信号量控制并发度，将任务分发给多个 worker 协程并行处理。它集成了进度观察、结构化日志和失败记录三大子系统，提供同步（`Start`）和异步（`Seed`/`StartAsync`/`WaitAsync`/`Collect`）两套 API，适用于批量任务处理场景（如并行文件哈希、批量网络请求等）。
+`executor.go` 是 `grow` 包的核心文件，实现了一个泛型并发任务执行器。`Executor` 采用生产者-消费者模式，通过信号量控制并发度，将任务分发给多个 tend 协程并行处理。它集成了进度观察、结构化日志和失败记录三大子系统，提供同步（`Start`）和异步（`Seed`/`StartAsync`/`WaitAsync`/`Collect`）两套 API，适用于批量任务处理场景（如并行文件哈希、批量网络请求等）。
 
 ## 类型
 
@@ -16,8 +16,8 @@
 | -------------- | --------------------------------- | ------------------------------------------ |
 | `Name`         | `string`                         | 执行器名称，用于日志和失败记录标识         |
 | `processor`    | `func(T) (R, error)`            | 任务处理函数，由用户提供                   |
-| `numWorkers`   | `int`                            | 最大并发 worker 数量                       |
-| `wg`           | `sync.WaitGroup`                 | 等待所有 worker 完成                       |
+| `numTends`   | `int`                            | 最大并发 tend 数量                       |
+| `wg`           | `sync.WaitGroup`                 | 等待所有 tend 完成                       |
 | `TaskChan`     | channel                          | 任务载荷通道（`Payload[T]`）               |
 | `ResultChan`   | channel                          | 结果载荷通道（`Payload[R]`）               |
 | `ControlChan`  | channel                          | 控制信号通道（`ControlSignal`）            |
@@ -31,14 +31,14 @@
 
 ### 构造函数
 
-#### `NewExecutor[T, R](name string, processor func(T)(R,error), numWorkers int, observers ...Observer) *Executor[T,R]`
+#### `NewExecutor[T, R](name string, processor func(T)(R,error), numTends int, observers ...Observer) *Executor[T,R]`
 
 创建一个新的执行器实例。
 
 **参数**:
 - `name` — 执行器名称
 - `processor` — 任务处理函数，接收类型 `T` 的任务，返回类型 `R` 的结果或错误
-- `numWorkers` — 最大并发 worker 数量
+- `numTends` — 最大并发 tend 数量
 - `observers` — 可选的进度观察者（如 `ProgressBar`）
 
 ### 方法
@@ -79,7 +79,7 @@
 
 ##### `WaitAsync()`
 
-等待异步执行完成。阻塞直到所有 worker 完成处理。
+等待异步执行完成。阻塞直到所有 tend 完成处理。
 
 ### 内部方法
 
@@ -87,13 +87,13 @@
 
 将任务切片包装为 `Payload[T]` 并逐个发送到 `TaskChan`，完成后发送 `ControlSignal`。
 
-#### `worker(taskPayload Payload[T])`
+#### `tend(taskPayload Payload[T])`
 
-处理单个任务的 worker 函数。包含 panic 恢复机制，确保单个任务的 panic 不会导致整个执行器崩溃。
+处理单个任务的 tend 函数。包含 panic 恢复机制，确保单个任务的 panic 不会导致整个执行器崩溃。
 
 #### `dispatch()`
 
-基于信号量的任务调度器。从 `TaskChan` 读取任务，为每个任务启动一个 worker 协程，通过信号量（`numWorkers`）控制最大并发数。
+基于信号量的任务调度器。从 `TaskChan` 读取任务，为每个任务启动一个 tend 协程，通过信号量（`numTends`）控制最大并发数。
 
 #### `collect() []TaskResult[T,R]`
 
@@ -175,7 +175,7 @@ executor.WaitAsync()
 Start(tasks)
   |
   v
-seed(tasks) ──> TaskChan ──> dispatch() ──> worker() ──> ResultChan ──> collect()
+seed(tasks) ──> TaskChan ──> dispatch() ──> tend() ──> ResultChan ──> collect()
   |                              |              |
   v                              |              ├── processTaskSuccess()
 ControlChan ─────────────────────┘              |     ├── Counter.AddSuccess()

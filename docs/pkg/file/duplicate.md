@@ -19,7 +19,7 @@ func getSizeDuplicate(fileInfoMap FileInfoMap) []string
 ### `getSnapshotDuplicate`（内部）
 
 ```go
-func getSnapshotDuplicate(fileSizeDuplicates []string, numWorkers int) ([]string, error)
+func getSnapshotDuplicate(fileSizeDuplicates []string, numTends int) ([]string, error)
 ```
 
 流水线第二阶段：按快照哈希过滤。使用 `grow.NewExecutor` 并行调用 `GetFileSnapshotSHA1` 计算每个候选文件的前 4KB 哈希值，筛选出快照哈希相同的文件。
@@ -27,7 +27,7 @@ func getSnapshotDuplicate(fileSizeDuplicates []string, numWorkers int) ([]string
 ### `getHashDuplicate`（内部）
 
 ```go
-func getHashDuplicate(fileSnapshotDuplicates []string, fileInfoMap FileInfoMap, numWorkers int) (map[FileInfo][]string, error)
+func getHashDuplicate(fileSnapshotDuplicates []string, fileInfoMap FileInfoMap, numTends int) (map[FileInfo][]string, error)
 ```
 
 流水线第三阶段：按完整哈希确认。使用 `grow.NewExecutor` 并行调用 `GetFileSHA1` 计算候选文件的完整哈希值，最终确认真正的重复文件。返回结果中 `FileInfo` 包含 `Hash` 和 `Size` 字段。
@@ -35,7 +35,7 @@ func getHashDuplicate(fileSnapshotDuplicates []string, fileInfoMap FileInfoMap, 
 ### `ScanDuplicateFile`
 
 ```go
-func ScanDuplicateFile(path string, numWorkers int) (map[FileInfo][]string, error)
+func ScanDuplicateFile(path string, numTends int) (map[FileInfo][]string, error)
 ```
 
 公开 API，扫描指定目录下的重复文件。
@@ -45,7 +45,7 @@ func ScanDuplicateFile(path string, numWorkers int) (map[FileInfo][]string, erro
 | 参数 | 类型 | 说明 |
 |------|------|------|
 | `path` | `string` | 要扫描的目录路径 |
-| `numWorkers` | `int` | 并行工作协程数量 |
+| `numTends` | `int` | 并行工作协程数量 |
 
 **返回值：**
 

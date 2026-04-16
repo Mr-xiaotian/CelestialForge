@@ -4,13 +4,13 @@
 
 ## 概述
 
-`counter.go` 实现了一个线程安全的任务计数器，用于跟踪 `Executor` 中任务的总数、成功数和失败数。内部使用 `sync/atomic` 包的原子操作保证在高并发场景下计数的正确性，支持多个 worker 协程同时更新计数而无需额外加锁。
+`counter.go` 实现了一个线程安全的任务计数器，用于跟踪 `Executor` 中任务的总数、成功数和失败数。内部使用 `sync/atomic` 包的原子操作保证在高并发场景下计数的正确性，支持多个 tend 协程同时更新计数而无需额外加锁。
 
 ## 类型
 
 ### `Counter`
 
-并发安全的任务进度计数器。嵌入到 `Executor` 中，供 worker 协程在任务完成时更新计数。
+并发安全的任务进度计数器。嵌入到 `Executor` 中，供 tend 协程在任务完成时更新计数。
 
 | 字段      | 类型           | 说明                               |
 | --------- | -------------- | ---------------------------------- |
@@ -32,11 +32,11 @@
 
 #### `AddSuccess(addNNum int)`
 
-原子地将成功计数增加 `addNNum`。每当一个 worker 成功处理任务后调用。
+原子地将成功计数增加 `addNNum`。每当一个 tend 成功处理任务后调用。
 
 #### `AddFailed(addNNum int)`
 
-原子地将失败计数增加 `addNNum`。每当一个 worker 处理任务出错后调用。
+原子地将失败计数增加 `addNNum`。每当一个 tend 处理任务出错后调用。
 
 #### `GetTotal() int`
 
@@ -64,7 +64,7 @@
 counter := grow.NewCounter()
 counter.SetTotal(100)
 
-// 在 worker 协程中
+// 在 tend 协程中
 counter.AddSuccess(1)
 // 或
 counter.AddFailed(1)

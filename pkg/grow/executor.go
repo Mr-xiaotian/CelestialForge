@@ -16,7 +16,7 @@ import (
 type Plot[T any, R any] struct {
 	Name       string
 	cultivator func(T) (R, error)
-	numWorkers int
+	numTends   int
 
 	SeedChan    chan Payload[T]
 	FruitChan   chan Payload[R]
@@ -57,11 +57,11 @@ func NewPlot[T any, R any](name string, cultivator func(T) (R, error), observers
 	return &Plot[T, R]{
 		Name:       name,
 		cultivator: cultivator,
-		numWorkers: o.numWorkers,
+		numTends:   o.numTends,
 
-		SeedChan:    make(chan Payload[T], o.numWorkers),
-		FruitChan:   make(chan Payload[R], o.numWorkers),
-		ControlChan: make(chan ControlSignal, o.numWorkers),
+		SeedChan:    make(chan Payload[T], o.numTends),
+		FruitChan:   make(chan Payload[R], o.numTends),
+		ControlChan: make(chan ControlSignal, o.numTends),
 
 		observers: observers,
 		logSpout:  logSpout,
@@ -161,8 +161,8 @@ func (e *Plot[T, R]) tend(taskPayload Payload[T], sem chan struct{}, done chan s
 
 // sprout 调度器，将种子分发给 tend 协程
 func (e *Plot[T, R]) sprout() {
-	sem := make(chan struct{}, e.numWorkers)  // 控制并发数
-	done := make(chan struct{}, e.numWorkers) // 控制tend完成信号
+	sem := make(chan struct{}, e.numTends)  // 控制并发数
+	done := make(chan struct{}, e.numTends) // 控制tend完成信号
 
 	ctxCancel := false
 	inputClosed := false
@@ -210,7 +210,7 @@ func (e *Plot[T, R]) harvest() []Karma[T, R] {
 func (e *Plot[T, R]) Start(tasks []T) []Karma[T, R] {
 	e.logSpout.Start()
 	e.failSpout.Start()
-	e.logInlet.StartPlot(e.Name, e.numWorkers)
+	e.logInlet.StartPlot(e.Name, e.numTends)
 	startTime := time.Now()
 
 	e.notifyStart()
@@ -249,7 +249,7 @@ func (e *Plot[T, R]) StartAsync() {
 	e.wg.Add(1)
 	defer e.wg.Done()
 
-	e.logInlet.StartPlot(e.Name, e.numWorkers)
+	e.logInlet.StartPlot(e.Name, e.numTends)
 	startTime := time.Now()
 
 	e.notifyStart()

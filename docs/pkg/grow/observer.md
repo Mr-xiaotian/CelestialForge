@@ -70,7 +70,7 @@ func (m *MetricsObserver) OnFinish(completed, total int) {
     log.Printf("Finished %d tasks in %v", completed, time.Since(m.startTime))
 }
 
-executor := grow.NewExecutor("worker", processFunc, 4, bar, &MetricsObserver{})
+executor := grow.NewExecutor("tend", processFunc, 4, bar, &MetricsObserver{})
 ```
 
 ## 关联文件

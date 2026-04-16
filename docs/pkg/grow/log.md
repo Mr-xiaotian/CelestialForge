@@ -71,7 +71,7 @@
 
 ##### `StartExecutor(name string, n int)`
 
-记录 Executor 启动事件。级别为 INFO，包含 Executor 名称和 worker 数量。
+记录 Executor 启动事件。级别为 INFO，包含 Executor 名称和 tend 数量。
 
 ##### `EndExecutor(name string, useTime float64, success, failed int)`
 
