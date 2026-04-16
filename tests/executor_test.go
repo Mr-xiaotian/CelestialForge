@@ -13,7 +13,7 @@ func TestPlot_AllError(t *testing.T) {
 		return "", errors.New("always fail")
 	}
 
-	plot := grow.NewPlot("test_all_error", cultivator, 2)
+	plot := grow.NewPlot("test_all_error", cultivator, nil, grow.WithWorkers(2))
 	tasks := []int{1, 2, 3, 4, 5}
 
 	results := plot.Start(tasks)
@@ -38,7 +38,7 @@ func TestPlot_PartialError(t *testing.T) {
 		return task * 10, nil
 	}
 
-	plot := grow.NewPlot("test_partial_error", cultivator, 2)
+	plot := grow.NewPlot("test_partial_error", cultivator, nil, grow.WithWorkers(2))
 	tasks := []int{1, 2, 3, 4, 5}
 
 	results := plot.Start(tasks)
@@ -64,7 +64,7 @@ func TestPlot_AllSuccess(t *testing.T) {
 		return task * 2, nil
 	}
 
-	plot := grow.NewPlot("test_all_success", cultivator, 3)
+	plot := grow.NewPlot("test_all_success", cultivator, nil, grow.WithWorkers(3))
 	tasks := []int{1, 2, 3, 4, 5}
 
 	collects := plot.Start(tasks)
@@ -91,7 +91,7 @@ func TestPlot_Async(t *testing.T) {
 		return task * 2, nil
 	}
 
-	plot := grow.NewPlot("test_async", cultivator, 3)
+	plot := grow.NewPlot("test_async", cultivator, nil, grow.WithWorkers(3))
 	results := map[int]int{}
 
 	go plot.StartAsync()

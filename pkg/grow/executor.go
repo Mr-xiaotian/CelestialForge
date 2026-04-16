@@ -42,7 +42,12 @@ func (e *Plot[T, R]) State() int32 {
 
 // NewPlot 创建一个 Plot 实例。
 // cultivator 为培育函数，接收种子返回果实。
-func NewPlot[T any, R any](name string, cultivator func(T) (R, error), numWorkers int, observers ...Observer) *Plot[T, R] {
+func NewPlot[T any, R any](name string, cultivator func(T) (R, error), observers []Observer, opts ...Option) *Plot[T, R] {
+	o := defaultOptions()
+	for _, opt := range opts {
+		opt(&o)
+	}
+
 	logSpout := funnel.NewSpout(&LogRecordHandler{}, 100, time.Second)
 	logInlet := NewLogInlet(logSpout.GetQueue(), time.Second, "INFO")
 	failSpout := funnel.NewSpout(&FailRecordHandler[T]{}, 100, time.Second)
@@ -52,11 +57,11 @@ func NewPlot[T any, R any](name string, cultivator func(T) (R, error), numWorker
 	return &Plot[T, R]{
 		Name:       name,
 		cultivator: cultivator,
-		numWorkers: numWorkers,
+		numWorkers: o.numWorkers,
 
-		SeedChan:    make(chan Payload[T], numWorkers),
-		FruitChan:   make(chan Payload[R], numWorkers),
-		ControlChan: make(chan ControlSignal, numWorkers),
+		SeedChan:    make(chan Payload[T], o.numWorkers),
+		FruitChan:   make(chan Payload[R], o.numWorkers),
+		ControlChan: make(chan ControlSignal, o.numWorkers),
 
 		observers: observers,
 		logSpout:  logSpout,
