@@ -17,6 +17,9 @@ type Plot[T any, R any] struct {
 	Name       string
 	cultivator func(T) (R, error)
 	numTends   int
+	maxRetries int
+	retryDelay func(attempt int) time.Duration
+	retryIf    func(error) bool
 
 	SeedChan    chan Payload[T]
 	FruitChan   chan Payload[R]
@@ -58,6 +61,9 @@ func NewPlot[T any, R any](name string, cultivator func(T) (R, error), observers
 		Name:       name,
 		cultivator: cultivator,
 		numTends:   o.numTends,
+		maxRetries: o.maxRetries,
+		retryDelay: o.retryDelay,
+		retryIf:    o.retryIf,
 
 		SeedChan:    make(chan Payload[T], o.numTends),
 		FruitChan:   make(chan Payload[R], o.numTends),
@@ -151,7 +157,20 @@ func (e *Plot[T, R]) tend(taskPayload Payload[T], sem chan struct{}, done chan s
 	}()
 
 	startTime := time.Now()
-	result, err := e.cultivator(taskPayload.Value)
+	var result R
+	var err error
+
+	for attempt := range e.maxRetries + 1 {
+		result, err = e.cultivator(taskPayload.Value)
+		if err == nil {
+			break
+		}
+		if !e.retryIf(err) {
+			break
+		}
+		time.Sleep(e.retryDelay(attempt))
+	}
+
 	if err != nil {
 		e.handleTaskError(taskPayload, err)
 	} else {
