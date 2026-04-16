@@ -120,7 +120,7 @@ func (e *Plot[S, F]) processFruit(seedPayload Payload[S], fruit F, startTime tim
 	seedRepr := trunc(fmt.Sprintf("%+v", seedPayload.Value), 50)
 	fruitRepr := trunc(fmt.Sprintf("%+v", fruit), 25)
 	useTime := time.Since(startTime).Seconds()
-	e.logInlet.SeedSuccess(e.Name, seedRepr, fruitRepr, useTime)
+	e.logInlet.TendSuccess(e.Name, seedRepr, fruitRepr, useTime)
 
 	e.FruitChan <- Payload[F]{ID: seedPayload.ID, Value: fruit, Prev: seedPayload.Value}
 }
@@ -131,8 +131,8 @@ func (e *Plot[S, F]) handleWeed(seedPayload Payload[S], err error) {
 	e.reportProgress()
 
 	seedRepr := trunc(fmt.Sprintf("%+v", seedPayload.Value), 50)
-	e.logInlet.SeedError(e.Name, seedRepr, err)
-	e.failInlet.SeedError(e.Name, seedPayload.ID, seedPayload.Value, err)
+	e.logInlet.TendFail(e.Name, seedRepr, err)
+	e.failInlet.TendFail(e.Name, seedPayload.ID, seedPayload.Value, err)
 }
 
 // ==== Internal Pipeline ====
