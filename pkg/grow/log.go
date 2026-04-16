@@ -122,6 +122,11 @@ func (l *LogInlet) TendSuccess(plotName string, seedRepr string, fruitRepr strin
 	l.log("SUCCESS", fmt.Sprintf("In '%s', Seed %s successed. Fruit is %s. Use %.2fs.", plotName, seedRepr, fruitRepr, useTime))
 }
 
+// TendRetry 记录种子培育重试日志。
+func (l *LogInlet) TendRetry(plotName string, seedRepr string, attempt int, err error) {
+	l.log("WARNING", fmt.Sprintf("In '%s', Seed %s attempt %d failed: %v. Retrying...", plotName, seedRepr, attempt, err))
+}
+
 // TendFail 记录种子培育失败日志。
 func (l *LogInlet) TendFail(plotName string, seedRepr string, err error) {
 	l.log("ERROR", fmt.Sprintf("In '%s', Seed %s failed: %v.", plotName, seedRepr, err))

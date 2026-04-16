@@ -157,10 +157,12 @@ func (e *Plot[S, F]) tend(seedPayload Payload[S], sem chan struct{}, done chan s
 	}()
 
 	startTime := time.Now()
+	seedRepr := trunc(fmt.Sprintf("%+v", seedPayload.Value), 50)
+
 	var fruit F
 	var err error
 
-	for attempt := range e.maxRetries + 1 {
+	for attempt := 1; attempt <= e.maxRetries+1; attempt++ {
 		fruit, err = e.cultivator(seedPayload.Value)
 		if err == nil {
 			break
@@ -168,6 +170,7 @@ func (e *Plot[S, F]) tend(seedPayload Payload[S], sem chan struct{}, done chan s
 		if !e.retryIf(err) {
 			break
 		}
+		e.logInlet.TendRetry(e.Name, seedRepr, attempt, err)
 		time.Sleep(e.retryDelay(attempt))
 	}
 
