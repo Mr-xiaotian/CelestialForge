@@ -34,12 +34,12 @@ func getSizeDuplicate(fileInfoMap FileInfoMap) []string {
 func getSnapshotDuplicate(fileSizeDuplicates []string, numTends int) ([]string, error) {
 	// 并行计算文件hash
 	plot := grow.NewPlot("SnapshotPlot", GetFileSnapshotSHA1, []grow.Observer{grow.NewProgressBar("Snapshoting files")}, grow.WithTends(numTends))
-	results := plot.Start(fileSizeDuplicates)
+	karmas := plot.Start(fileSizeDuplicates)
 
 	// 收集结果
 	fileSnapshotMap := map[string][]string{}
-	for _, res := range results {
-		fileSnapshotMap[res.Fruit] = append(fileSnapshotMap[res.Fruit], res.Seed)
+	for _, kar := range karmas {
+		fileSnapshotMap[kar.Fruit] = append(fileSnapshotMap[kar.Fruit], kar.Seed)
 	}
 
 	var fileSnapshotDuplicates []string
@@ -57,12 +57,12 @@ func getSnapshotDuplicate(fileSizeDuplicates []string, numTends int) ([]string, 
 func getHashDuplicate(fileSnapshotDuplicates []string, fileInfoMap FileInfoMap, numTends int) (map[FileInfo][]string, error) {
 	// 并行计算文件hash
 	plot := grow.NewPlot("HashPlot", GetFileSHA1, []grow.Observer{grow.NewProgressBar("Hashing files")}, grow.WithTends(numTends))
-	results := plot.Start(fileSnapshotDuplicates)
+	karmas := plot.Start(fileSnapshotDuplicates)
 
 	// 收集结果
 	fileHashMap := map[string][]string{}
-	for _, res := range results {
-		fileHashMap[res.Fruit] = append(fileHashMap[res.Fruit], res.Seed)
+	for _, kar := range karmas {
+		fileHashMap[kar.Fruit] = append(fileHashMap[kar.Fruit], kar.Seed)
 	}
 	fileHashDuplicates := map[FileInfo][]string{}
 	for hash, paths := range fileHashMap {

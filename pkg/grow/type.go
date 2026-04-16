@@ -10,7 +10,7 @@ type Payload[V any] struct {
 }
 
 // Karma 种子与果实的配对，记录一颗种子培育后的结果。
-type Karma[T any, R any] struct {
-	Seed  T
-	Fruit R
+type Karma[S any, F any] struct {
+	Seed  S
+	Fruit F
 }

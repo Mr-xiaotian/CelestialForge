@@ -15,8 +15,8 @@ import (
 type FailRecord[T any] struct {
 	FormatTime   string
 	PlotName     string
-	TaskID       int
-	TaskValue    T
+	SeedID       int
+	SeedValue    T
 	ErrorMessage string
 }
 
@@ -89,13 +89,13 @@ func NewFailInlet[T any](ch chan<- FailRecord[T], timeout time.Duration) *FailIn
 	}
 }
 
-// TaskError 发送一条种子培育失败记录。
-func (f *FailInlet[T]) TaskError(plotName string, taskID int, task T, err error) {
+// SeedError 发送一条种子培育失败记录。
+func (f *FailInlet[T]) SeedError(plotName string, seedID int, seed T, err error) {
 	f.Send(FailRecord[T]{
 		FormatTime:   time.Now().Format("2006-01-02 15:04:05"),
 		PlotName:     plotName,
-		TaskID:       taskID,
-		TaskValue:    task,
+		SeedID:       seedID,
+		SeedValue:    seed,
 		ErrorMessage: fmt.Sprintf("%v", err),
 	})
 }

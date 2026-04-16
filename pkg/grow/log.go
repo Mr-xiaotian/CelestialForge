@@ -117,12 +117,12 @@ func (l *LogInlet) EndPlot(plotName string, useTime float64, successNum, failedN
 	l.log("INFO", fmt.Sprintf("'%s' end. Use %.2fs. %d success, %d failed.", plotName, useTime, successNum, failedNum))
 }
 
-// TaskSuccess 记录种子培育成功日志。
-func (l *LogInlet) TaskSuccess(plotName string, taskRepr string, resultRepr string, useTime float64) {
-	l.log("SUCCESS", fmt.Sprintf("In '%s', Task %s successed. Result is %s. Use %.2fs.", plotName, taskRepr, resultRepr, useTime))
+// SeedSuccess 记录种子培育成功日志。
+func (l *LogInlet) SeedSuccess(plotName string, seedRepr string, fruitRepr string, useTime float64) {
+	l.log("SUCCESS", fmt.Sprintf("In '%s', Seed %s successed. Fruit is %s. Use %.2fs.", plotName, seedRepr, fruitRepr, useTime))
 }
 
-// TaskError 记录种子培育失败日志。
-func (l *LogInlet) TaskError(plotName string, taskRepr string, err error) {
-	l.log("ERROR", fmt.Sprintf("In '%s', Task %s failed: %v.", plotName, taskRepr, err))
+// SeedError 记录种子培育失败日志。
+func (l *LogInlet) SeedError(plotName string, seedRepr string, err error) {
+	l.log("ERROR", fmt.Sprintf("In '%s', Seed %s failed: %v.", plotName, seedRepr, err))
 }
