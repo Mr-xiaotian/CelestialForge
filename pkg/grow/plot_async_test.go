@@ -17,7 +17,8 @@ func TestPlot_Async(t *testing.T) {
 	go plot.StartAsync()
 
 	for seed := range 5 {
-		plot.Seed(seed, seed)
+		idx := seed
+		plot.Seed(idx, seed)
 	}
 	plot.Seal()
 

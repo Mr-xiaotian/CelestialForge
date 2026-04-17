@@ -90,11 +90,10 @@ func NewFailInlet[T any](ch chan<- FailRecord[T], timeout time.Duration) *FailIn
 }
 
 // TendFail 发送一条种子培育失败记录。
-func (f *FailInlet[T]) TendFail(plotName string, seedID int, seed T, err error) {
+func (f *FailInlet[T]) TendFail(plotName string, seed T, err error) {
 	f.Send(FailRecord[T]{
 		FormatTime:   time.Now().Format("2006-01-02 15:04:05"),
 		PlotName:     plotName,
-		SeedID:       seedID,
 		SeedValue:    seed,
 		ErrorMessage: fmt.Sprintf("%v", err),
 	})
