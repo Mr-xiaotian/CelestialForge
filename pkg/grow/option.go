@@ -31,14 +31,14 @@ func WithTends(n int) Option {
 	}
 }
 
-// WithMaxRetries 设置最大重试次数。默认为 1（最多重试一次）。
+// WithMaxRetries 设置最大重试次数。默认为 1, 执行 2 次（1 次原始 + 1 次重试）。
 func WithMaxRetries(n int) Option {
 	return func(o *plotOptions) {
 		o.maxRetries = n
 	}
 }
 
-// WithRetryDelay 设置重试间隔策略。attempt 从 0 开始。
+// WithRetryDelay 设置重试间隔策略。attempt 从 1 开始。
 func WithRetryDelay(fn func(attempt int) time.Duration) Option {
 	return func(o *plotOptions) {
 		o.retryDelay = fn

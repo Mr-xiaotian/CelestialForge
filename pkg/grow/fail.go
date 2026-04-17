@@ -62,7 +62,7 @@ func (f *FailRecordHandler[T]) HandleRecord(record FailRecord[T]) error {
 		return fmt.Errorf("写入失败记录文件失败: %w", err)
 	}
 
-	return err
+	return nil
 }
 
 // AfterStop 关闭 JSONL 文件。

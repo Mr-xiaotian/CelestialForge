@@ -38,11 +38,6 @@ type Plot[S any, F any] struct {
 	Counter
 }
 
-// State 返回执行器当前状态：0=idle, 1=running, 2=done。
-func (e *Plot[S, F]) State() int32 {
-	return e.state.Load()
-}
-
 // NewPlot 创建一个 Plot 实例。
 // cultivator 为培育函数，接收种子返回果实。
 func NewPlot[S any, F any](name string, cultivator func(S) (F, error), observers []Observer, opts ...Option) *Plot[S, F] {
@@ -133,6 +128,11 @@ func (e *Plot[S, F]) handleWeed(seedPayload Payload[S], err error) {
 	seedRepr := trunc(fmt.Sprintf("%+v", seedPayload.Value), 50)
 	e.logInlet.TendFail(e.Name, seedRepr, err)
 	e.failInlet.TendFail(e.Name, seedPayload.ID, seedPayload.Value, err)
+}
+
+// State 返回执行器当前状态：0=idle, 1=running, 2=done。
+func (e *Plot[S, F]) State() int32 {
+	return e.state.Load()
 }
 
 // ==== Internal Pipeline ====
@@ -294,7 +294,6 @@ func (e *Plot[S, F]) WaitAsync() {
 // ==== Cleanup API ====
 
 // Close 立即取消 Plot，强制停止所有操作。慎用，可能导致未完成的任务丢失。
-func (e *Plot[S, F]) Close() {
-	e.cancel()
-	e.notifyFinish()
-}
+// func (e *Plot[S, F]) Close() {
+// 	e.cancel()
+// }
