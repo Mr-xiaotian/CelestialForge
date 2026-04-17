@@ -21,8 +21,8 @@ type Plot[S any, F any] struct {
 	retryDelay func(attempt int) time.Duration
 	retryIf    func(error) bool
 
-	SeedChan  chan Payload[S]
-	FruitChan chan Payload[F]
+	SeedChan   chan Payload[S]
+	FruitChans []chan Payload[F]
 
 	observers []Observer
 	logSpout  *funnel.Spout[LogRecord]
@@ -59,8 +59,8 @@ func NewPlot[S any, F any](name string, cultivator func(S) (F, error), observers
 		retryDelay: o.retryDelay,
 		retryIf:    o.retryIf,
 
-		SeedChan:  make(chan Payload[S], o.numTends),
-		FruitChan: make(chan Payload[F], o.numTends),
+		SeedChan:   make(chan Payload[S], o.numTends),
+		FruitChans: []chan Payload[F]{make(chan Payload[F], o.numTends)},
 
 		observers: observers,
 		logSpout:  logSpout,
@@ -115,7 +115,10 @@ func (p *Plot[S, F]) bearFruit(seedPayload Payload[S], fruit F, startTime time.T
 	useTime := time.Since(startTime).Seconds()
 	p.logInlet.TendSuccess(p.Name, seedRepr, fruitRepr, useTime)
 
-	p.FruitChan <- Payload[F]{Value: fruit, Prev: seedPayload.Value}
+	fruitPayload := Payload[F]{Value: fruit, Prev: seedPayload.Value}
+	for _, ch := range p.FruitChans {
+		ch <- fruitPayload
+	}
 }
 
 // bearWeed 处理培育失败的种子
@@ -193,7 +196,10 @@ func (p *Plot[S, F]) sprout() {
 
 	for {
 		if shouldFinish() {
-			p.FruitChan <- Payload[F]{Signal: SignalSeal, Source: p.Name}
+			sealPayload := Payload[F]{Signal: SignalSeal, Source: p.Name}
+			for _, ch := range p.FruitChans {
+				ch <- sealPayload
+			}
 			return
 		}
 
@@ -217,7 +223,7 @@ func (p *Plot[S, F]) sprout() {
 // harvest 收获所有果实，并保留对应的种子信息
 func (p *Plot[S, F]) harvest() []Karma[S, F] {
 	fruits := make([]Karma[S, F], 0)
-	for res := range p.FruitChan {
+	for res := range p.FruitChans[0] {
 		if res.Signal == SignalSeal {
 			break
 		}
@@ -263,9 +269,9 @@ func (p *Plot[S, F]) Seal() {
 	p.SeedChan <- Payload[S]{Signal: SignalSeal, Source: p.Name}
 }
 
-// Harvest 逐个收获果实，阻塞直到 FruitChan 关闭。
+// Harvest 逐个收获果实，阻塞直到 FruitChans 关闭。
 func (p *Plot[S, F]) Harvest(sickle func(Payload[F])) {
-	for res := range p.FruitChan {
+	for res := range p.FruitChans[0] {
 		if res.Signal == SignalSeal {
 			break
 		}
