@@ -21,9 +21,8 @@ type Plot[S any, F any] struct {
 	retryDelay func(attempt int) time.Duration
 	retryIf    func(error) bool
 
-	SeedChan    chan Payload[S]
-	FruitChan   chan Payload[F]
-	ControlChan chan ControlSignal
+	SeedChan  chan Payload[S]
+	FruitChan chan Payload[F]
 
 	observers []Observer
 	logSpout  *funnel.Spout[LogRecord]
@@ -60,9 +59,8 @@ func NewPlot[S any, F any](name string, cultivator func(S) (F, error), observers
 		retryDelay: o.retryDelay,
 		retryIf:    o.retryIf,
 
-		SeedChan:    make(chan Payload[S], o.numTends),
-		FruitChan:   make(chan Payload[F], o.numTends),
-		ControlChan: make(chan ControlSignal, o.numTends),
+		SeedChan:  make(chan Payload[S], o.numTends),
+		FruitChan: make(chan Payload[F], o.numTends),
 
 		observers: observers,
 		logSpout:  logSpout,
@@ -143,7 +141,7 @@ func (p *Plot[S, F]) seed(seeds []S) {
 	for idx, seed := range seeds {
 		p.SeedChan <- Payload[S]{ID: idx, Value: seed}
 	}
-	p.ControlChan <- ControlSignal{Source: "plot"}
+	p.SeedChan <- Payload[S]{Signal: SignalSeal, Source: p.Name}
 }
 
 // tend 照料单个任务
@@ -195,19 +193,21 @@ func (p *Plot[S, F]) sprout() {
 
 	for {
 		if shouldFinish() {
-			close(p.FruitChan)
+			p.FruitChan <- Payload[F]{Signal: SignalSeal, Source: p.Name}
 			return
 		}
 
 		select {
 		case seed := <-p.SeedChan:
+			if seed.Signal == SignalSeal {
+				inputClosed = true
+				continue
+			}
 			sem <- struct{}{} // 获取并发令牌
 			inFlight++
 			go p.tend(seed, sem, done)
 		case <-done: // tend完成信号
 			inFlight--
-		case <-p.ControlChan:
-			inputClosed = true
 		case <-p.ctx.Done():
 			ctxCancel = true
 		}
@@ -218,6 +218,9 @@ func (p *Plot[S, F]) sprout() {
 func (p *Plot[S, F]) harvest() []Karma[S, F] {
 	fruits := make([]Karma[S, F], 0)
 	for res := range p.FruitChan {
+		if res.Signal == SignalSeal {
+			break
+		}
 		fruits = append(fruits, Karma[S, F]{
 			Seed:  res.Prev.(S),
 			Fruit: res.Value,
@@ -257,12 +260,15 @@ func (p *Plot[S, F]) Seed(id int, seed S) {
 
 // Seal 封闭种子入口，通知 sprout 不再有新种子。
 func (p *Plot[S, F]) Seal() {
-	p.ControlChan <- ControlSignal{Source: p.Name}
+	p.SeedChan <- Payload[S]{Signal: SignalSeal, Source: p.Name}
 }
 
 // Harvest 逐个收获果实，阻塞直到 FruitChan 关闭。
 func (p *Plot[S, F]) Harvest(sickle func(Payload[F])) {
 	for res := range p.FruitChan {
+		if res.Signal == SignalSeal {
+			break
+		}
 		if sickle != nil {
 			sickle(res)
 		}
