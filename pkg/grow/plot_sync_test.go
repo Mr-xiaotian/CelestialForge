@@ -24,8 +24,8 @@ func TestPlot_AllError(t *testing.T) {
 	if plot.GetCompleted() != len(seeds) {
 		t.Errorf("expected %d completed, got %d", len(seeds), plot.GetCompleted())
 	}
-	if int(plot.State()) != 2 {
-		t.Errorf("expected state 2 (done), got %d", plot.State())
+	if int(plot.GetState()) != 2 {
+		t.Errorf("expected state 2 (done), got %d", plot.GetState())
 	}
 }
 
@@ -81,7 +81,7 @@ func TestPlot_AllSuccess(t *testing.T) {
 			t.Errorf("seed %d: expected %d, got %d", seed, seed*2, karmas[seed])
 		}
 	}
-	if int(plot.State()) != 2 {
-		t.Errorf("expected state 2 (done), got %d", plot.State())
+	if int(plot.GetState()) != 2 {
+		t.Errorf("expected state 2 (done), got %d", plot.GetState())
 	}
 }

@@ -29,7 +29,7 @@ func TestPlot_Async(t *testing.T) {
 	if len(fruits) != 5 {
 		t.Errorf("expected 5 fruits, got %d", len(fruits))
 	}
-	if int(plot.State()) != 2 {
-		t.Errorf("expected state 2 (done), got %d", plot.State())
+	if int(plot.GetState()) != 2 {
+		t.Errorf("expected state 2 (done), got %d", plot.GetState())
 	}
 }

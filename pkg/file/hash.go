@@ -198,7 +198,7 @@ func computeDirHash(path string, hashType HashType, excludeDirs, excludeExts map
 		if entry.IsDir() {
 			tag = "D"
 		}
-		combined = append(combined, []byte(fmt.Sprintf("%s:%s:%s", tag, entry.Name(), h))...)
+		combined = append(combined, fmt.Appendf(nil, "%s:%s:%s", tag, entry.Name(), h)...)
 	}
 
 	if len(combined) == 0 {

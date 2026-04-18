@@ -14,7 +14,7 @@ import (
 // 通过 funnel 系统记录日志和失败信息。
 // S 为种子类型，F 为果实类型。
 type Plot[S any, F any] struct {
-	Name       string
+	name       string
 	cultivator func(S) (F, error)
 	observers  []Observer
 	numTends   int
@@ -48,7 +48,7 @@ func NewPlot[S any, F any](name string, cultivator func(S) (F, error), observers
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &Plot[S, F]{
-		Name:       name,
+		name:       name,
 		cultivator: cultivator,
 		observers:  observers,
 		numTends:   o.numTends,
@@ -134,7 +134,7 @@ func (p *Plot[S, F]) bearFruit(seedPayload Payload[S], fruit F, startTime time.T
 	seedRepr := trunc(fmt.Sprintf("%+v", seedPayload.Value), 50)
 	fruitRepr := trunc(fmt.Sprintf("%+v", fruit), 25)
 	useTime := time.Since(startTime).Seconds()
-	p.logInlet.TendSuccess(p.Name, seedRepr, fruitRepr, useTime)
+	p.logInlet.TendSuccess(p.name, seedRepr, fruitRepr, useTime)
 
 	fruitPayload := Payload[F]{Value: fruit, Prev: seedPayload.Value}
 	for _, ch := range p.FruitChans {
@@ -148,12 +148,19 @@ func (p *Plot[S, F]) bearWeed(seedPayload Payload[S], err error) {
 	p.reportProgress()
 
 	seedRepr := trunc(fmt.Sprintf("%+v", seedPayload.Value), 50)
-	p.logInlet.TendFail(p.Name, seedRepr, err)
-	p.failInlet.TendFail(p.Name, seedPayload.Value, err)
+	p.logInlet.TendFail(p.name, seedRepr, err)
+	p.failInlet.TendFail(p.name, seedPayload.Value, err)
 }
 
-// State 返回执行器当前状态：0=idle, 1=running, 2=done。
-func (p *Plot[S, F]) State() int32 {
+// ==== State ====
+
+// GetName 返回 plot 名称。
+func (p *Plot[S, F]) GetName() string {
+	return p.name
+}
+
+// GetState 返回执行器当前状态：0=idle, 1=running, 2=done。
+func (p *Plot[S, F]) GetState() int32 {
 	return p.state.Load()
 }
 
@@ -165,7 +172,7 @@ func (p *Plot[S, F]) seed(seeds []S) {
 	for idx, seed := range seeds {
 		p.SeedChan <- Payload[S]{ID: idx, Value: seed}
 	}
-	p.SeedChan <- Payload[S]{Signal: SignalSeal, Source: p.Name}
+	p.SeedChan <- Payload[S]{Signal: SignalSeal, Source: p.name}
 }
 
 // tend 照料单个任务
@@ -192,7 +199,7 @@ func (p *Plot[S, F]) tend(seedPayload Payload[S], sem chan struct{}, done chan s
 		if !p.retryIf(err) {
 			break
 		}
-		p.logInlet.TendRetry(p.Name, seedRepr, attempt, err)
+		p.logInlet.TendRetry(p.name, seedRepr, attempt, err)
 		time.Sleep(p.retryDelay(attempt))
 	}
 
@@ -217,7 +224,7 @@ func (p *Plot[S, F]) sprout() {
 
 	for {
 		if shouldFinish() {
-			sealPayload := Payload[F]{Signal: SignalSeal, Source: p.Name}
+			sealPayload := Payload[F]{Signal: SignalSeal, Source: p.name}
 			for _, ch := range p.FruitChans {
 				ch <- sealPayload
 			}
@@ -263,7 +270,7 @@ func (p *Plot[S, F]) Start(seeds []S) []Karma[S, F] {
 	p.InitLocalEnv()
 
 	p.startSpouts()
-	p.logInlet.StartPlot(p.Name, p.numTends)
+	p.logInlet.StartPlot(p.name, p.numTends)
 	startTime := time.Now()
 
 	p.notifyStart()
@@ -272,7 +279,7 @@ func (p *Plot[S, F]) Start(seeds []S) []Karma[S, F] {
 	karmas := p.harvest()
 	p.notifyFinish()
 
-	p.logInlet.EndPlot(p.Name, time.Since(startTime).Seconds(), p.GetSuccess(), p.GetFailed())
+	p.logInlet.EndPlot(p.name, time.Since(startTime).Seconds(), p.GetSuccess(), p.GetFailed())
 	p.stopSpouts()
 	return karmas
 }
@@ -294,7 +301,7 @@ func (p *Plot[S, F]) Seal() {
 	p.wg.Add(1)
 	defer p.wg.Done()
 
-	p.SeedChan <- Payload[S]{Signal: SignalSeal, Source: p.Name}
+	p.SeedChan <- Payload[S]{Signal: SignalSeal, Source: p.name}
 }
 
 // Harvest 逐个收获果实，阻塞直到收到 SignalSeal。
@@ -320,14 +327,14 @@ func (p *Plot[S, F]) StartAsync() {
 	p.wg.Add(1)
 	defer p.wg.Done()
 
-	p.logInlet.StartPlot(p.Name, p.numTends)
+	p.logInlet.StartPlot(p.name, p.numTends)
 	startTime := time.Now()
 
 	p.notifyStart()
 	p.sprout()
 	p.notifyFinish()
 
-	p.logInlet.EndPlot(p.Name, time.Since(startTime).Seconds(), p.GetSuccess(), p.GetFailed())
+	p.logInlet.EndPlot(p.name, time.Since(startTime).Seconds(), p.GetSuccess(), p.GetFailed())
 }
 
 // WaitAsync 等待异步 Plot 结束并清理资源
