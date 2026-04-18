@@ -8,12 +8,16 @@ type Farm struct {
 	plots       []PlotNode
 	plotsByName map[string]PlotNode
 	edges       map[string]map[string]struct{}
+	roots       map[string]struct{}
+	heads       map[string]struct{}
 }
 
 func NewFarm() *Farm {
 	return &Farm{
 		plotsByName: make(map[string]PlotNode),
 		edges:       make(map[string]map[string]struct{}),
+		roots:       make(map[string]struct{}),
+		heads:       make(map[string]struct{}),
 	}
 }
 
@@ -42,6 +46,26 @@ func (f *Farm) GetPlot(name string) (PlotNode, bool) {
 	return plot, ok
 }
 
+// IsRoot 返回指定 plot 当前是否为 root。
+// root plot 没有任何上游。
+func (f *Farm) IsRoot(name string) bool {
+	if f.roots == nil {
+		return false
+	}
+	_, ok := f.roots[name]
+	return ok
+}
+
+// IsHead 返回指定 plot 当前是否为 head。
+// head plot 没有任何下游。
+func (f *Farm) IsHead(name string) bool {
+	if f.heads == nil {
+		return false
+	}
+	_, ok := f.heads[name]
+	return ok
+}
+
 // ==== 注册接口 ====
 
 // AddPlot 将一个或多个 plot 注册到 farm 中。
@@ -62,6 +86,8 @@ func (f *Farm) AddPlot(plots ...PlotNode) error {
 
 		f.plots = append(f.plots, plot)
 		f.plotsByName[name] = plot
+		f.roots[name] = struct{}{}
+		f.heads[name] = struct{}{}
 	}
 
 	return nil
@@ -106,6 +132,8 @@ func (f *Farm) addEdge(from, to string) {
 		f.edges[from] = make(map[string]struct{})
 	}
 	f.edges[from][to] = struct{}{}
+	delete(f.heads, from)
+	delete(f.roots, to)
 }
 
 // Connected 返回 from -> to 是否已建立连接。

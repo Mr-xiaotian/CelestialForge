@@ -22,7 +22,7 @@ type PlotNode interface {
 
 	StartAsync()
 	WaitAsync()
-	SeedAny(id int, seed any, source string) error
+	SeedAny(id int, seed any) error
 	Seal()
 }
 
