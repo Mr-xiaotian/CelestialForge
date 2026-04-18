@@ -24,7 +24,7 @@ func TestPlot_Async(t *testing.T) {
 
 	plot.Harvest(func(res grow.Payload[int]) {
 		fruits[res.Prev.(int)] = res.Value
-	})
+	}, 0)
 
 	plot.WaitAsync()
 

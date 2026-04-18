@@ -16,6 +16,7 @@ import (
 type Plot[S any, F any] struct {
 	Name       string
 	cultivator func(S) (F, error)
+	observers  []Observer
 	numTends   int
 	maxRetries int
 	retryDelay func(attempt int) time.Duration
@@ -24,7 +25,6 @@ type Plot[S any, F any] struct {
 	SeedChan   chan Payload[S]
 	FruitChans []chan Payload[F]
 
-	observers []Observer
 	logSpout  *funnel.Spout[LogRecord]
 	logInlet  *LogInlet
 	failSpout *funnel.Spout[FailRecord[S]]
@@ -54,6 +54,7 @@ func NewPlot[S any, F any](name string, cultivator func(S) (F, error), observers
 	return &Plot[S, F]{
 		Name:       name,
 		cultivator: cultivator,
+		observers:  observers,
 		numTends:   o.numTends,
 		maxRetries: o.maxRetries,
 		retryDelay: o.retryDelay,
@@ -62,7 +63,6 @@ func NewPlot[S any, F any](name string, cultivator func(S) (F, error), observers
 		SeedChan:   make(chan Payload[S], o.numTends),
 		FruitChans: []chan Payload[F]{make(chan Payload[F], o.numTends)},
 
-		observers: observers,
 		logSpout:  logSpout,
 		logInlet:  logInlet,
 		failSpout: failSpout,
@@ -270,8 +270,8 @@ func (p *Plot[S, F]) Seal() {
 }
 
 // Harvest 逐个收获果实，阻塞直到 FruitChans 关闭。
-func (p *Plot[S, F]) Harvest(sickle func(Payload[F])) {
-	for res := range p.FruitChans[0] {
+func (p *Plot[S, F]) Harvest(sickle func(Payload[F]), chanIndex int) {
+	for res := range p.FruitChans[chanIndex] {
 		if res.Signal == SignalSeal {
 			break
 		}
