@@ -288,7 +288,8 @@ func (p *Plot[S, F]) Seed(id int, seed S) {
 	p.SeedChan <- Payload[S]{ID: id, Value: seed}
 }
 
-// Seal 封闭种子入口，通知 sprout 不再有新种子。
+// Seal 通过发送 SignalSeal 显式封闭种子入口。
+// 异步模式约定使用信号终止，而不是关闭 SeedChan。
 func (p *Plot[S, F]) Seal() {
 	p.wg.Add(1)
 	defer p.wg.Done()
@@ -296,7 +297,7 @@ func (p *Plot[S, F]) Seal() {
 	p.SeedChan <- Payload[S]{Signal: SignalSeal, Source: p.Name}
 }
 
-// Harvest 逐个收获果实，阻塞直到 FruitChans 关闭。
+// Harvest 逐个收获果实，阻塞直到收到 SignalSeal。
 func (p *Plot[S, F]) Harvest(sickle func(Payload[F]), chanIndex int) {
 	p.wg.Add(1)
 	defer p.wg.Done()
@@ -312,8 +313,9 @@ func (p *Plot[S, F]) Harvest(sickle func(Payload[F]), chanIndex int) {
 }
 
 // StartAsync 异步启动调度器，种子播入和果实收获由外部控制。
-// 外部通过 Seed 播种，通过 Harvest 收获
-// 完成后需调用 WaitAsync 进行清理
+// 调用前需先完成 BindChans，确保 Seed/Fruit/Log/Fail 通道已注入。
+// 外部通过 Seed 播种，通过 Harvest 收获，并通过 Seal 显式发送终止信号。
+// 完成后需调用 WaitAsync 等待调度器及外部交互协程收尾。
 func (p *Plot[S, F]) StartAsync() {
 	p.wg.Add(1)
 	defer p.wg.Done()
