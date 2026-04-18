@@ -46,6 +46,5 @@ func (c *Counter) GetCompleted() int {
 }
 
 func (c *Counter) IsFinish() bool {
-	total := c.GetTotal()
-	return total > 0 && c.GetCompleted() == total
+	return c.GetCompleted() == c.GetTotal()
 }

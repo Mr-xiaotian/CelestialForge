@@ -16,11 +16,13 @@ type PlotNode interface {
 	GetName() string
 	GetState() int32
 	GetSeedChanAny() any
+
 	ConnectTo(next PlotNode) error
 	BindInlet(logChan chan<- LogRecord, failChan chan<- FailRecord)
+
 	StartAsync()
 	WaitAsync()
-	SeedAny(id int, seed any) error
+	SeedAny(id int, seed any, source string) error
 	Seal()
 }
 
@@ -101,19 +103,6 @@ func (p *Plot[S, F]) addFruitChan(fruitChan chan Payload[F]) {
 	p.fruitChans = append(p.fruitChans, fruitChan)
 }
 
-// startSpouts 启动本地日志/失败 spout。
-// 用于 standalone 模式运行。
-func (p *Plot[S, F]) startSpouts() {
-	p.logSpout.Start()
-	p.failSpout.Start()
-}
-
-// stopSpouts 停止本地日志/失败 spout。
-func (p *Plot[S, F]) stopSpouts() {
-	p.logSpout.Stop()
-	p.failSpout.Stop()
-}
-
 // ==== Observer Hooks ====
 
 // reportProgress 报告进度
@@ -156,7 +145,7 @@ func (p *Plot[S, F]) bearFruit(seedPayload Payload[S], fruit F, startTime time.T
 	useTime := time.Since(startTime).Seconds()
 	p.logInlet.TendSuccess(p.name, seedRepr, fruitRepr, useTime)
 
-	fruitPayload := Payload[F]{Value: fruit, Prev: seedPayload.Value}
+	fruitPayload := Payload[F]{Value: fruit, Prev: seedPayload.Value, Source: p.name}
 	for _, ch := range p.fruitChans {
 		ch <- fruitPayload
 	}
@@ -172,7 +161,7 @@ func (p *Plot[S, F]) bearWeed(seedPayload Payload[S], err error) {
 	p.failInlet.TendFail(p.name, seedPayload.Value, err)
 }
 
-// ==== State ====
+// ==== Getters ====
 
 // GetName 返回 plot 名称。
 func (p *Plot[S, F]) GetName() string {
@@ -189,6 +178,8 @@ func (p *Plot[S, F]) GetSeedChanAny() any {
 	return p.seedChan
 }
 
+// ==== Connection ====
+
 // ConnectTo 将当前 plot 的 fruit 输出连接到下游 plot 的 seed 输入。
 func (p *Plot[S, F]) ConnectTo(next PlotNode) error {
 	seedChan, ok := next.GetSeedChanAny().(chan Payload[F])
@@ -198,6 +189,21 @@ func (p *Plot[S, F]) ConnectTo(next PlotNode) error {
 
 	p.addFruitChan(seedChan)
 	return nil
+}
+
+// ==== Spout ====
+
+// StartSpouts 启动本地日志/失败 spout。
+// 用于 standalone 模式运行。
+func (p *Plot[S, F]) StartSpouts() {
+	p.logSpout.Start()
+	p.failSpout.Start()
+}
+
+// StopSpouts 停止本地日志/失败 spout。
+func (p *Plot[S, F]) StopSpouts() {
+	p.logSpout.Stop()
+	p.failSpout.Stop()
 }
 
 // ==== Internal Pipeline ====
@@ -273,6 +279,9 @@ func (p *Plot[S, F]) sprout() {
 				inputClosed = true
 				continue
 			}
+			if seed.Source != p.name {
+				p.AddTotal(1)
+			}
 			sem <- struct{}{} // 获取并发令牌
 			inFlight++
 			go p.tend(seed, sem, done)
@@ -305,7 +314,7 @@ func (p *Plot[S, F]) harvest() []Karma[S, F] {
 func (p *Plot[S, F]) Start(seeds []S) []Karma[S, F] {
 	p.InitLocalEnv()
 
-	p.startSpouts()
+	p.StartSpouts()
 	p.logInlet.StartPlot(p.name, p.numTends)
 	startTime := time.Now()
 
@@ -316,7 +325,7 @@ func (p *Plot[S, F]) Start(seeds []S) []Karma[S, F] {
 	p.notifyFinish()
 
 	p.logInlet.EndPlot(p.name, time.Since(startTime).Seconds(), p.GetSuccess(), p.GetFailed())
-	p.stopSpouts()
+	p.StopSpouts()
 	return karmas
 }
 
@@ -338,7 +347,7 @@ func (p *Plot[S, F]) Seed(id int, seed S) {
 	defer p.wg.Done()
 
 	p.AddTotal(1)
-	p.seedChan <- Payload[S]{ID: id, Value: seed}
+	p.seedChan <- Payload[S]{ID: id, Value: seed, Source: p.name}
 }
 
 // Seal 通过发送 SignalSeal 显式封闭种子入口。
