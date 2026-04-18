@@ -18,10 +18,9 @@ func TestPlot_Async(t *testing.T) {
 
 	go plot.StartAsync()
 	for seed := range 5 {
-		idx := seed
-		go plot.Seed(idx, seed)
+		plot.Seed(seed, seed)
 	}
-	go plot.Seal()
+	plot.Seal()
 	go plot.Harvest(func(res grow.Payload[int]) {
 		fruits[res.Prev.(int)] = res.Value
 	}, 0)

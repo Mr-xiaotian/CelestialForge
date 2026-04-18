@@ -1,6 +1,11 @@
 package grow
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+
+	"github.com/Mr-xiaotian/CelestialForge/pkg/funnel"
+)
 
 // Farm 管理多节点静态图的注册与连接。
 // 当前仅负责持有节点、校验名称唯一性，并建立超边式连接。
@@ -180,6 +185,89 @@ func (f *Farm) Connect(fromPlots []PlotNode, toPlots []PlotNode) error {
 			}
 			f.addEdge(from.GetName(), to.GetName())
 		}
+	}
+
+	return nil
+}
+
+// ==== 启动接口 ====
+
+func (f *Farm) rootPlots() []PlotNode {
+	roots := make([]PlotNode, 0, len(f.roots))
+	for name := range f.roots {
+		if plot, ok := f.plotsByName[name]; ok {
+			roots = append(roots, plot)
+		}
+	}
+	return roots
+}
+
+func (f *Farm) headPlots() []PlotNode {
+	heads := make([]PlotNode, 0, len(f.heads))
+	for name := range f.heads {
+		if plot, ok := f.plotsByName[name]; ok {
+			heads = append(heads, plot)
+		}
+	}
+	return heads
+}
+
+func (f *Farm) validateStartInputs(inputs map[string][]any) error {
+	for name := range inputs {
+		plot, ok := f.plotsByName[name]
+		if !ok {
+			return fmt.Errorf("plot %q is not registered in farm", name)
+		}
+		if !f.IsRoot(name) {
+			return fmt.Errorf("plot %q is not a root plot", name)
+		}
+		if err := f.requireRegistered(plot); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Start 同步启动整张 farm 图。
+// inputs 按 plot 名称声明初始任务，仅允许注入 root plot。
+// 流程为：创建并启动全局 log/fail spout，绑定各 plot inlet，启动所有 plot，
+// 注入初始任务，封闭所有 root，等待所有 head，最后停止全局 spout。
+func (f *Farm) Start(inputs map[string][]any) error {
+	if err := f.validateStartInputs(inputs); err != nil {
+		return err
+	}
+
+	logSpout := funnel.NewSpout(&LogRecordHandler{}, 100, time.Second)
+	failSpout := funnel.NewSpout(&FailRecordHandler{}, 100, time.Second)
+
+	logSpout.Start()
+	failSpout.Start()
+	defer failSpout.Stop()
+	defer logSpout.Stop()
+
+	for _, plot := range f.plots {
+		plot.BindInlet(logSpout.GetQueue(), failSpout.GetQueue())
+	}
+
+	for _, plot := range f.plots {
+		go plot.StartAsync()
+	}
+
+	for name, seeds := range inputs {
+		plot := f.plotsByName[name]
+		for idx, seed := range seeds {
+			if err := plot.SeedAny(idx, seed); err != nil {
+				return err
+			}
+		}
+	}
+
+	for _, plot := range f.rootPlots() {
+		go plot.Seal()
+	}
+
+	for _, plot := range f.plots {
+		plot.WaitAsync()
 	}
 
 	return nil
