@@ -10,13 +10,18 @@ import (
 	"github.com/Mr-xiaotian/CelestialForge/pkg/funnel"
 )
 
-// PlotNode 是 Farm 建图阶段使用的最小节点接口。
-// 它只暴露名称、状态和连接所需的能力，不承载运行控制逻辑。
+// PlotNode 是 Farm 管理 plot 时使用的统一接口。
+// 它同时覆盖建图与运行阶段所需的最小能力。
 type PlotNode interface {
 	GetName() string
 	GetState() int32
 	GetSeedChanAny() any
 	ConnectTo(next PlotNode) error
+	BindInlet(logChan chan<- LogRecord, failChan chan<- FailRecord)
+	StartAsync()
+	WaitAsync()
+	SeedAny(id int, seed any) error
+	Seal()
 }
 
 // Plot 并发任务执行器。将一组种子（任务）分发给 tend 池并行培育，
@@ -36,8 +41,8 @@ type Plot[S any, F any] struct {
 
 	logSpout  *funnel.Spout[LogRecord]
 	logInlet  *LogInlet
-	failSpout *funnel.Spout[FailRecord[S]]
-	failInlet *FailInlet[S]
+	failSpout *funnel.Spout[FailRecord]
+	failInlet *FailInlet
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -45,6 +50,8 @@ type Plot[S any, F any] struct {
 	state  atomic.Int32 // 0=idle, 1=running, 2=done
 	Counter
 }
+
+// ==== PlotNode 实现 ====
 
 // NewPlot 创建一个 Plot 实例。
 // cultivator 为培育函数，接收种子返回果实。
@@ -78,14 +85,14 @@ func (p *Plot[S, F]) InitLocalEnv() {
 	fruitChan := make(chan Payload[F], p.numTends)
 
 	p.logSpout = funnel.NewSpout(&LogRecordHandler{}, 100, time.Second)
-	p.failSpout = funnel.NewSpout(&FailRecordHandler[S]{}, 100, time.Second)
+	p.failSpout = funnel.NewSpout(&FailRecordHandler{}, 100, time.Second)
 
 	p.addFruitChan(fruitChan)
 	p.BindInlet(p.logSpout.GetQueue(), p.failSpout.GetQueue())
 }
 
 // BindInlet 绑定 plot 运行时所需的四类通道。
-func (p *Plot[S, F]) BindInlet(logChan chan<- LogRecord, failChan chan<- FailRecord[S]) {
+func (p *Plot[S, F]) BindInlet(logChan chan<- LogRecord, failChan chan<- FailRecord) {
 	p.logInlet = NewLogInlet(logChan, time.Second, "INFO")
 	p.failInlet = NewFailInlet(failChan, time.Second)
 }
@@ -314,6 +321,16 @@ func (p *Plot[S, F]) Start(seeds []S) []Karma[S, F] {
 }
 
 // ==== Async API ====
+
+// SeedAny 以弱类型方式播入单颗种子，供 Farm 统一注入初始任务时使用。
+func (p *Plot[S, F]) SeedAny(id int, seed any) error {
+	typedSeed, ok := seed.(S)
+	if !ok {
+		return fmt.Errorf("plot %q seed type mismatch: got %T", p.name, seed)
+	}
+	p.Seed(id, typedSeed)
+	return nil
+}
 
 // Seed 播入单颗种子到 SeedChan。
 func (p *Plot[S, F]) Seed(id int, seed S) {
