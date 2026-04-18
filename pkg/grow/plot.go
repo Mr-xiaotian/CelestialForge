@@ -10,6 +10,15 @@ import (
 	"github.com/Mr-xiaotian/CelestialForge/pkg/funnel"
 )
 
+// PlotNode 是 Farm 建图阶段使用的最小节点接口。
+// 它只暴露名称、状态和连接所需的能力，不承载运行控制逻辑。
+type PlotNode interface {
+	GetName() string
+	GetState() int32
+	GetSeedChanAny() any
+	ConnectTo(next PlotNode) error
+}
+
 // Plot 并发任务执行器。将一组种子（任务）分发给 tend 池并行培育，
 // 通过 funnel 系统记录日志和失败信息。
 // S 为种子类型，F 为果实类型。
@@ -22,8 +31,8 @@ type Plot[S any, F any] struct {
 	retryDelay func(attempt int) time.Duration
 	retryIf    func(error) bool
 
-	SeedChan   chan Payload[S]
-	FruitChans []chan Payload[F]
+	seedChan   chan Payload[S]
+	fruitChans []chan Payload[F]
 
 	logSpout  *funnel.Spout[LogRecord]
 	logInlet  *LogInlet
@@ -56,6 +65,9 @@ func NewPlot[S any, F any](name string, cultivator func(S) (F, error), observers
 		retryDelay: o.retryDelay,
 		retryIf:    o.retryIf,
 
+		seedChan:   make(chan Payload[S], o.numTends),
+		fruitChans: []chan Payload[F]{},
+
 		ctx:    ctx,
 		cancel: cancel,
 	}
@@ -63,22 +75,23 @@ func NewPlot[S any, F any](name string, cultivator func(S) (F, error), observers
 
 // InitLocalEnv 初始化本地环境，包括创建日志/失败 spout 并绑定 inlet。
 func (p *Plot[S, F]) InitLocalEnv() {
-	SeedChan := make(chan Payload[S], p.numTends)
-	FruitChans := []chan Payload[F]{make(chan Payload[F], p.numTends)}
+	fruitChan := make(chan Payload[F], p.numTends)
 
 	p.logSpout = funnel.NewSpout(&LogRecordHandler{}, 100, time.Second)
 	p.failSpout = funnel.NewSpout(&FailRecordHandler[S]{}, 100, time.Second)
 
-	p.BindChans(SeedChan, FruitChans, p.logSpout.GetQueue(), p.failSpout.GetQueue())
+	p.addFruitChan(fruitChan)
+	p.BindInlet(p.logSpout.GetQueue(), p.failSpout.GetQueue())
 }
 
-// BindChans 绑定 plot 运行时所需的四类通道。
-func (p *Plot[S, F]) BindChans(seedChan chan Payload[S], fruitChans []chan Payload[F], logChan chan<- LogRecord, failChan chan<- FailRecord[S]) {
-	p.SeedChan = seedChan
-	p.FruitChans = fruitChans
-
+// BindInlet 绑定 plot 运行时所需的四类通道。
+func (p *Plot[S, F]) BindInlet(logChan chan<- LogRecord, failChan chan<- FailRecord[S]) {
 	p.logInlet = NewLogInlet(logChan, time.Second, "INFO")
 	p.failInlet = NewFailInlet(failChan, time.Second)
+}
+
+func (p *Plot[S, F]) addFruitChan(fruitChan chan Payload[F]) {
+	p.fruitChans = append(p.fruitChans, fruitChan)
 }
 
 // startSpouts 启动本地日志/失败 spout。
@@ -137,7 +150,7 @@ func (p *Plot[S, F]) bearFruit(seedPayload Payload[S], fruit F, startTime time.T
 	p.logInlet.TendSuccess(p.name, seedRepr, fruitRepr, useTime)
 
 	fruitPayload := Payload[F]{Value: fruit, Prev: seedPayload.Value}
-	for _, ch := range p.FruitChans {
+	for _, ch := range p.fruitChans {
 		ch <- fruitPayload
 	}
 }
@@ -164,15 +177,31 @@ func (p *Plot[S, F]) GetState() int32 {
 	return p.state.Load()
 }
 
+// GetSeedChanAny 返回 SeedChan 的动态类型表示，供 Farm 在连接时做类型对齐。
+func (p *Plot[S, F]) GetSeedChanAny() any {
+	return p.seedChan
+}
+
+// ConnectTo 将当前 plot 的 fruit 输出连接到下游 plot 的 seed 输入。
+func (p *Plot[S, F]) ConnectTo(next PlotNode) error {
+	seedChan, ok := next.GetSeedChanAny().(chan Payload[F])
+	if !ok {
+		return fmt.Errorf("plot %q fruit type is incompatible with plot %q seed type", p.name, next.GetName())
+	}
+
+	p.addFruitChan(seedChan)
+	return nil
+}
+
 // ==== Internal Pipeline ====
 
 // seed 内部批量播种
 func (p *Plot[S, F]) seed(seeds []S) {
 	p.AddTotal(len(seeds))
 	for idx, seed := range seeds {
-		p.SeedChan <- Payload[S]{ID: idx, Value: seed}
+		p.seedChan <- Payload[S]{ID: idx, Value: seed}
 	}
-	p.SeedChan <- Payload[S]{Signal: SignalSeal, Source: p.name}
+	p.seedChan <- Payload[S]{Signal: SignalSeal, Source: p.name}
 }
 
 // tend 照料单个任务
@@ -225,14 +254,14 @@ func (p *Plot[S, F]) sprout() {
 	for {
 		if shouldFinish() {
 			sealPayload := Payload[F]{Signal: SignalSeal, Source: p.name}
-			for _, ch := range p.FruitChans {
+			for _, ch := range p.fruitChans {
 				ch <- sealPayload
 			}
 			return
 		}
 
 		select {
-		case seed := <-p.SeedChan:
+		case seed := <-p.seedChan:
 			if seed.Signal == SignalSeal {
 				inputClosed = true
 				continue
@@ -251,7 +280,7 @@ func (p *Plot[S, F]) sprout() {
 // harvest 收获所有果实，并保留对应的种子信息
 func (p *Plot[S, F]) harvest() []Karma[S, F] {
 	fruits := make([]Karma[S, F], 0)
-	for res := range p.FruitChans[0] {
+	for res := range p.fruitChans[0] {
 		if res.Signal == SignalSeal {
 			break
 		}
@@ -292,7 +321,7 @@ func (p *Plot[S, F]) Seed(id int, seed S) {
 	defer p.wg.Done()
 
 	p.AddTotal(1)
-	p.SeedChan <- Payload[S]{ID: id, Value: seed}
+	p.seedChan <- Payload[S]{ID: id, Value: seed}
 }
 
 // Seal 通过发送 SignalSeal 显式封闭种子入口。
@@ -301,7 +330,7 @@ func (p *Plot[S, F]) Seal() {
 	p.wg.Add(1)
 	defer p.wg.Done()
 
-	p.SeedChan <- Payload[S]{Signal: SignalSeal, Source: p.name}
+	p.seedChan <- Payload[S]{Signal: SignalSeal, Source: p.name}
 }
 
 // Harvest 逐个收获果实，阻塞直到收到 SignalSeal。
@@ -309,7 +338,7 @@ func (p *Plot[S, F]) Harvest(sickle func(Payload[F]), chanIndex int) {
 	p.wg.Add(1)
 	defer p.wg.Done()
 
-	for res := range p.FruitChans[chanIndex] {
+	for res := range p.fruitChans[chanIndex] {
 		if res.Signal == SignalSeal {
 			break
 		}
@@ -320,7 +349,7 @@ func (p *Plot[S, F]) Harvest(sickle func(Payload[F]), chanIndex int) {
 }
 
 // StartAsync 异步启动调度器，种子播入和果实收获由外部控制。
-// 调用前需先完成 BindChans，确保 Seed/Fruit/Log/Fail 通道已注入。
+// 调用前需先完成 BindInlet，确保 Seed/Fruit/Log/Fail 通道已注入。
 // 外部通过 Seed 播种，通过 Harvest 收获，并通过 Seal 显式发送终止信号。
 // 完成后需调用 WaitAsync 等待调度器及外部交互协程收尾。
 func (p *Plot[S, F]) StartAsync() {
