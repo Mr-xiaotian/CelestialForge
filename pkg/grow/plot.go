@@ -30,9 +30,9 @@ type Plot[S any, F any] struct {
 	failSpout *funnel.Spout[FailRecord[S]]
 	failInlet *FailInlet[S]
 
-	wg     sync.WaitGroup
 	ctx    context.Context
 	cancel context.CancelFunc
+	wg     sync.WaitGroup
 	state  atomic.Int32 // 0=idle, 1=running, 2=done
 	Counter
 }
@@ -45,10 +45,6 @@ func NewPlot[S any, F any](name string, cultivator func(S) (F, error), observers
 		opt(&o)
 	}
 
-	logSpout := funnel.NewSpout(&LogRecordHandler{}, 100, time.Second)
-	logInlet := NewLogInlet(logSpout.GetQueue(), time.Second, "INFO")
-	failSpout := funnel.NewSpout(&FailRecordHandler[S]{}, 100, time.Second)
-	failInlet := NewFailInlet(failSpout.GetQueue(), time.Second)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &Plot[S, F]{
@@ -60,17 +56,42 @@ func NewPlot[S any, F any](name string, cultivator func(S) (F, error), observers
 		retryDelay: o.retryDelay,
 		retryIf:    o.retryIf,
 
-		SeedChan:   make(chan Payload[S], o.numTends),
-		FruitChans: []chan Payload[F]{make(chan Payload[F], o.numTends)},
-
-		logSpout:  logSpout,
-		logInlet:  logInlet,
-		failSpout: failSpout,
-		failInlet: failInlet,
-
 		ctx:    ctx,
 		cancel: cancel,
 	}
+}
+
+// InitLocalEnv 初始化本地环境，包括创建日志/失败 spout 并绑定 inlet。
+func (p *Plot[S, F]) InitLocalEnv() {
+	SeedChan := make(chan Payload[S], p.numTends)
+	FruitChans := []chan Payload[F]{make(chan Payload[F], p.numTends)}
+
+	p.logSpout = funnel.NewSpout(&LogRecordHandler{}, 100, time.Second)
+	p.failSpout = funnel.NewSpout(&FailRecordHandler[S]{}, 100, time.Second)
+
+	p.BindChans(SeedChan, FruitChans, p.logSpout.GetQueue(), p.failSpout.GetQueue())
+}
+
+// BindChans 绑定 plot 运行时所需的四类通道。
+func (p *Plot[S, F]) BindChans(seedChan chan Payload[S], fruitChans []chan Payload[F], logChan chan<- LogRecord, failChan chan<- FailRecord[S]) {
+	p.SeedChan = seedChan
+	p.FruitChans = fruitChans
+
+	p.logInlet = NewLogInlet(logChan, time.Second, "INFO")
+	p.failInlet = NewFailInlet(failChan, time.Second)
+}
+
+// startSpouts 启动本地日志/失败 spout。
+// 用于 standalone 模式运行。
+func (p *Plot[S, F]) startSpouts() {
+	p.logSpout.Start()
+	p.failSpout.Start()
+}
+
+// stopSpouts 停止本地日志/失败 spout。
+func (p *Plot[S, F]) stopSpouts() {
+	p.logSpout.Stop()
+	p.failSpout.Stop()
 }
 
 // ==== Observer Hooks ====
@@ -239,8 +260,9 @@ func (p *Plot[S, F]) harvest() []Karma[S, F] {
 
 // Start 同步启动 Plot，阻塞直到所有种子培育完成并返回果实。
 func (p *Plot[S, F]) Start(seeds []S) []Karma[S, F] {
-	p.logSpout.Start()
-	p.failSpout.Start()
+	p.InitLocalEnv()
+
+	p.startSpouts()
 	p.logInlet.StartPlot(p.Name, p.numTends)
 	startTime := time.Now()
 
@@ -251,8 +273,7 @@ func (p *Plot[S, F]) Start(seeds []S) []Karma[S, F] {
 	p.notifyFinish()
 
 	p.logInlet.EndPlot(p.Name, time.Since(startTime).Seconds(), p.GetSuccess(), p.GetFailed())
-	p.logSpout.Stop()
-	p.failSpout.Stop()
+	p.stopSpouts()
 	return karmas
 }
 
@@ -260,17 +281,26 @@ func (p *Plot[S, F]) Start(seeds []S) []Karma[S, F] {
 
 // Seed 播入单颗种子到 SeedChan。
 func (p *Plot[S, F]) Seed(id int, seed S) {
+	p.wg.Add(1)
+	defer p.wg.Done()
+
 	p.AddTotal(1)
 	p.SeedChan <- Payload[S]{ID: id, Value: seed}
 }
 
 // Seal 封闭种子入口，通知 sprout 不再有新种子。
 func (p *Plot[S, F]) Seal() {
+	p.wg.Add(1)
+	defer p.wg.Done()
+
 	p.SeedChan <- Payload[S]{Signal: SignalSeal, Source: p.Name}
 }
 
 // Harvest 逐个收获果实，阻塞直到 FruitChans 关闭。
 func (p *Plot[S, F]) Harvest(sickle func(Payload[F]), chanIndex int) {
+	p.wg.Add(1)
+	defer p.wg.Done()
+
 	for res := range p.FruitChans[chanIndex] {
 		if res.Signal == SignalSeal {
 			break

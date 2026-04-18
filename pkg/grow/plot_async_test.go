@@ -12,20 +12,18 @@ func TestPlot_Async(t *testing.T) {
 	}
 
 	plot := grow.NewPlot("test_async", cultivator, nil, grow.WithTends(3))
+	plot.InitLocalEnv()
 	fruits := map[int]int{}
 
 	go plot.StartAsync()
-
 	for seed := range 5 {
 		idx := seed
-		plot.Seed(idx, seed)
+		go plot.Seed(idx, seed)
 	}
-	plot.Seal()
-
-	plot.Harvest(func(res grow.Payload[int]) {
+	go plot.Seal()
+	go plot.Harvest(func(res grow.Payload[int]) {
 		fruits[res.Prev.(int)] = res.Value
 	}, 0)
-
 	plot.WaitAsync()
 
 	if len(fruits) != 5 {
