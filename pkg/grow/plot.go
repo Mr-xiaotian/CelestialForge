@@ -212,7 +212,7 @@ func (p *Plot[S, F]) StopSpouts() {
 func (p *Plot[S, F]) seed(seeds []S) {
 	p.AddTotal(len(seeds))
 	for idx, seed := range seeds {
-		p.seedChan <- Payload[S]{ID: idx, Value: seed}
+		p.seedChan <- Payload[S]{ID: idx, Value: seed, Source: p.name}
 	}
 	p.seedChan <- Payload[S]{Signal: SignalSeal, Source: p.name}
 }

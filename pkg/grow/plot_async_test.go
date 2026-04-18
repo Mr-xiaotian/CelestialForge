@@ -13,7 +13,7 @@ func TestPlot_Async(t *testing.T) {
 
 	plot := grow.NewPlot("test_async", cultivator, nil, grow.WithTends(3))
 	plot.InitLocalEnv()
-	// plot.StartSpouts()
+	plot.StartSpouts()
 	fruits := map[int]int{}
 
 	go plot.StartAsync()
@@ -26,8 +26,8 @@ func TestPlot_Async(t *testing.T) {
 		fruits[res.Prev.(int)] = res.Value
 	}, 0)
 
-	// plot.StopSpouts()
 	plot.WaitAsync()
+	plot.StopSpouts()
 
 	if len(fruits) != 5 {
 		t.Errorf("expected 5 fruits, got %d", len(fruits))
