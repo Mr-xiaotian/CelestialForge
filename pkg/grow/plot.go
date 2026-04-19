@@ -38,6 +38,7 @@ type Plot[S any, F any] struct {
 	maxRetries int
 	retryDelay func(attempt int) time.Duration
 	retryIf    func(error) bool
+	logLevel   string
 
 	seedChan   chan Payload[S]
 	fruitChans []chan Payload[F]
@@ -76,6 +77,7 @@ func NewPlot[S any, F any](name string, cultivator func(S) (F, error), observers
 		maxRetries: o.maxRetries,
 		retryDelay: o.retryDelay,
 		retryIf:    o.retryIf,
+		logLevel:   o.logLevel,
 
 		seedChan:   make(chan Payload[S], o.numTends),
 		fruitChans: []chan Payload[F]{},

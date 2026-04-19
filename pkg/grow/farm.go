@@ -10,6 +10,7 @@ import (
 // Farm 管理多节点静态图的注册与连接。
 // 当前仅负责持有节点、校验名称唯一性，并建立超边式连接。
 type Farm struct {
+	name        string
 	plots       []PlotNode
 	plotsByName map[string]PlotNode
 	edges       map[string]map[string]struct{}
@@ -22,13 +23,14 @@ type Farm struct {
 	failInlet *FailInlet
 }
 
-func NewFarm() *Farm {
+func NewFarm(name string, logLevel string) *Farm {
 	logSpout := funnel.NewSpout(&LogRecordHandler{}, 100, time.Second)
 	failSpout := funnel.NewSpout(&FailRecordHandler{}, 100, time.Second)
-	logInlet := NewLogInlet(logSpout.GetQueue(), time.Second, "INFO")
+	logInlet := NewLogInlet(logSpout.GetQueue(), time.Second, logLevel)
 	failInlet := NewFailInlet(failSpout.GetQueue(), time.Second)
 
 	return &Farm{
+		name:        name,
 		plotsByName: make(map[string]PlotNode),
 		edges:       make(map[string]map[string]struct{}),
 		roots:       make(map[string]struct{}),
@@ -259,7 +261,7 @@ func (f *Farm) Start(inputs map[string][]any) error {
 	defer f.logSpout.Stop()
 
 	startTime := time.Now()
-	f.logInlet.StartFarm()
+	f.logInlet.StartFarm(f.name)
 
 	for _, plot := range f.plots {
 		plot.BindInlet(f.logSpout.GetQueue(), f.failSpout.GetQueue())
@@ -286,7 +288,7 @@ func (f *Farm) Start(inputs map[string][]any) error {
 		plot.WaitAsync()
 	}
 
-	f.logInlet.EndFarm(time.Since(startTime).Seconds())
+	f.logInlet.EndFarm(f.name, time.Since(startTime).Seconds())
 
 	return nil
 }

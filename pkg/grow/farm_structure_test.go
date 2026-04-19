@@ -35,7 +35,7 @@ func TestFarmStructure121(t *testing.T) {
 		return seed, nil
 	}, nil, grow.WithTends(8))
 
-	farm := grow.NewFarm()
+	farm := grow.NewFarm("structure_121", "INFO")
 	if err := farm.AddPlot(root, midA, midB, head); err != nil {
 		t.Fatalf("AddPlot() error = %v", err)
 	}
@@ -127,7 +127,7 @@ func TestFarmStructure21FaninDifferentSpeed(t *testing.T) {
 		return seed, nil
 	}, nil, grow.WithTends(8))
 
-	farm := grow.NewFarm()
+	farm := grow.NewFarm("structure_21_fanin_different_speed", "INFO")
 	if err := farm.AddPlot(rootFast, rootSlow, head); err != nil {
 		t.Fatalf("AddPlot() error = %v", err)
 	}

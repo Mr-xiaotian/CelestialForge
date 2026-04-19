@@ -22,7 +22,7 @@ func TestFarmStartLinear(t *testing.T) {
 		return seed, nil
 	}, nil, grow.WithTends(2))
 
-	farm := grow.NewFarm()
+	farm := grow.NewFarm("start_linear", "INFO")
 	if err := farm.AddPlot(root, head); err != nil {
 		t.Fatalf("AddPlot() error = %v", err)
 	}
@@ -58,7 +58,7 @@ func TestFarmStartRejectNonRootInput(t *testing.T) {
 	root := grow.NewPlot("root", func(seed int) (int, error) { return seed, nil }, nil)
 	head := grow.NewPlot("head", func(seed int) (int, error) { return seed, nil }, nil)
 
-	farm := grow.NewFarm()
+	farm := grow.NewFarm("start_reject_non_root_input", "INFO")
 	if err := farm.AddPlot(root, head); err != nil {
 		t.Fatalf("AddPlot() error = %v", err)
 	}

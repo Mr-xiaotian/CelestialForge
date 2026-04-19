@@ -9,12 +9,13 @@ import (
 )
 
 var levelOrder = map[string]int{
-	"TRACE":   0,
-	"DEBUG":   1,
-	"INFO":    2,
-	"SUCCESS": 3,
-	"WARNING": 4,
-	"ERROR":   5,
+	"TRACE":    0,
+	"DEBUG":    1,
+	"SUCCESS":  2,
+	"INFO":     3,
+	"WARNING":  4,
+	"ERROR":    5,
+	"CRITICAL": 6,
 }
 
 // ==== Record ====
@@ -108,13 +109,13 @@ func (l *LogInlet) log(level string, message string) {
 }
 
 // StartFarm 记录 Farm 启动日志。
-func (l *LogInlet) StartFarm() {
-	l.log("INFO", "Farm start.")
+func (l *LogInlet) StartFarm(farmName string) {
+	l.log("INFO", fmt.Sprintf("Farm '%s' start.", farmName))
 }
 
 // EndFarm 记录 Farm 结束日志。
-func (l *LogInlet) EndFarm(useTime float64) {
-	l.log("INFO", fmt.Sprintf("Farm end. Use %.2fs.", useTime))
+func (l *LogInlet) EndFarm(farmName string, useTime float64) {
+	l.log("INFO", fmt.Sprintf("Farm '%s' end. Use %.2fs.", farmName, useTime))
 }
 
 // StartPlot 记录 Plot 启动日志。

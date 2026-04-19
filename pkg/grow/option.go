@@ -13,6 +13,7 @@ type plotOptions struct {
 	maxRetries int
 	retryDelay func(attempt int) time.Duration
 	retryIf    func(error) bool
+	logLevel   string
 }
 
 func defaultOptions() plotOptions {
@@ -21,6 +22,7 @@ func defaultOptions() plotOptions {
 		maxRetries: 1,
 		retryDelay: func(attempt int) time.Duration { return 0 },
 		retryIf:    func(error) bool { return true },
+		logLevel:   "INFO",
 	}
 }
 
@@ -49,5 +51,12 @@ func WithRetryDelay(fn func(attempt int) time.Duration) Option {
 func WithRetryIf(fn func(error) bool) Option {
 	return func(o *plotOptions) {
 		o.retryIf = fn
+	}
+}
+
+// WithLogLevel 设置日志级别。默认为 "INFO"。
+func WithLogLevel(level string) Option {
+	return func(o *plotOptions) {
+		o.logLevel = level
 	}
 }
