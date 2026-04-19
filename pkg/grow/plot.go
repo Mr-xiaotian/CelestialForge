@@ -120,10 +120,12 @@ func (p *Plot[S, F]) AddUpstream(name string) {
 	p.upstreams[name] = struct{}{}
 }
 
+// resetSeals 重置所有上游 plot 的 seal 状态
 func (p *Plot[S, F]) resetSeals() {
 	p.sealedFrom = make(map[string]struct{}, len(p.upstreams))
 }
 
+// markSealed 标记一个上游 plot 为已 seal
 func (p *Plot[S, F]) markSealed(source string) bool {
 	if len(p.upstreams) == 0 {
 		return true
@@ -187,12 +189,12 @@ func (p *Plot[S, F]) bearFruit(seedPayload Payload[S], fruit F, startTime time.T
 }
 
 // bearWeed 处理培育失败的种子
-func (p *Plot[S, F]) bearWeed(seedPayload Payload[S], err error) {
+func (p *Plot[S, F]) bearWeed(seedPayload Payload[S], err error, startTime time.Time) {
 	p.AddWeedNum(1)
 	p.reportProgress()
 
 	seedRepr := trunc(fmt.Sprintf("%+v", seedPayload.Value), 50)
-	p.logInlet.SeedWither(p.name, seedRepr, err)
+	p.logInlet.SeedWither(p.name, seedRepr, err, startTime)
 	p.failInlet.SeedWither(p.name, seedPayload.Value, err)
 }
 
@@ -256,7 +258,7 @@ func (p *Plot[S, F]) seed(seeds []S) {
 func (p *Plot[S, F]) tend(seedPayload Payload[S], sem chan struct{}, done chan struct{}) {
 	defer func() {
 		if r := recover(); r != nil {
-			p.bearWeed(seedPayload, fmt.Errorf("cultivator panic: %v", r))
+			p.bearWeed(seedPayload, fmt.Errorf("cultivator panic: %v", r), time.Now())
 		}
 		<-sem              // 释放并发令牌
 		done <- struct{}{} // 发送完成信号
@@ -268,6 +270,7 @@ func (p *Plot[S, F]) tend(seedPayload Payload[S], sem chan struct{}, done chan s
 	var fruit F
 	var err error
 
+	// 重试机制
 	for attempt := 1; attempt <= p.maxRetries+1; attempt++ {
 		fruit, err = p.cultivator(seedPayload.Value)
 		if err == nil {
@@ -280,8 +283,9 @@ func (p *Plot[S, F]) tend(seedPayload Payload[S], sem chan struct{}, done chan s
 		time.Sleep(p.retryDelay(attempt))
 	}
 
+	// 路由结果
 	if err != nil {
-		p.bearWeed(seedPayload, err)
+		p.bearWeed(seedPayload, err, startTime)
 	} else {
 		p.bearFruit(seedPayload, fruit, startTime)
 	}

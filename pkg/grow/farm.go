@@ -282,7 +282,7 @@ func (f *Farm) Start(inputs map[string][]any) error {
 	}
 
 	for _, plot := range f.rootPlots() {
-		go plot.Seal()
+		plot.Seal()
 	}
 
 	for _, plot := range f.plots {

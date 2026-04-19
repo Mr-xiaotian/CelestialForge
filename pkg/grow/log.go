@@ -134,8 +134,8 @@ func (l *LogInlet) SeedRipen(plotName string, seedRepr string, fruitRepr string,
 }
 
 // SeedWither 记录种子枯萎日志。
-func (l *LogInlet) SeedWither(plotName string, seedRepr string, err error) {
-	l.log("ERROR", fmt.Sprintf("In '%s', Seed %s withered: %v.", plotName, seedRepr, err))
+func (l *LogInlet) SeedWither(plotName string, seedRepr string, err error, startTime time.Time) {
+	l.log("ERROR", fmt.Sprintf("In '%s', Seed %s withered: %v. Use %.2fs.", plotName, seedRepr, err, time.Since(startTime).Seconds()))
 }
 
 // SeedReplant 记录种子培育重试日志。

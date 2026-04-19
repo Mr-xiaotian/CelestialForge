@@ -109,7 +109,7 @@ func TestFarmStructure21FaninDifferentSpeed(t *testing.T) {
 	}, nil, grow.WithTends(4), grow.WithChanSize(50), grow.WithLogLevel("SUCCESS"))
 
 	rootSlow := grow.NewPlot("rootSlow", func(seed int) (int, error) {
-		time.Sleep(time.Second)
+		time.Sleep(10 * time.Millisecond)
 		return seed*10 + 2, nil
 	}, nil, grow.WithTends(4), grow.WithChanSize(50), grow.WithLogLevel("SUCCESS"))
 
