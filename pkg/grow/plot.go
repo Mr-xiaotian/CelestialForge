@@ -143,7 +143,7 @@ func (p *Plot[S, F]) bearFruit(seedPayload Payload[S], fruit F, startTime time.T
 	seedRepr := trunc(fmt.Sprintf("%+v", seedPayload.Value), 50)
 	fruitRepr := trunc(fmt.Sprintf("%+v", fruit), 25)
 	useTime := time.Since(startTime).Seconds()
-	p.logInlet.TendSuccess(p.name, seedRepr, fruitRepr, useTime)
+	p.logInlet.SeedRipen(p.name, seedRepr, fruitRepr, useTime)
 
 	fruitPayload := Payload[F]{Value: fruit, Prev: seedPayload.Value, Source: p.name}
 	for _, ch := range p.fruitChans {
@@ -157,8 +157,8 @@ func (p *Plot[S, F]) bearWeed(seedPayload Payload[S], err error) {
 	p.reportProgress()
 
 	seedRepr := trunc(fmt.Sprintf("%+v", seedPayload.Value), 50)
-	p.logInlet.TendFail(p.name, seedRepr, err)
-	p.failInlet.TendFail(p.name, seedPayload.Value, err)
+	p.logInlet.SeedWither(p.name, seedRepr, err)
+	p.failInlet.SeedWither(p.name, seedPayload.Value, err)
 }
 
 // ==== Getters ====
@@ -241,7 +241,7 @@ func (p *Plot[S, F]) tend(seedPayload Payload[S], sem chan struct{}, done chan s
 		if !p.retryIf(err) {
 			break
 		}
-		p.logInlet.TendRetry(p.name, seedRepr, attempt, err)
+		p.logInlet.SeedReplant(p.name, seedRepr, attempt, err)
 		time.Sleep(p.retryDelay(attempt))
 	}
 

@@ -15,14 +15,29 @@ type Farm struct {
 	edges       map[string]map[string]struct{}
 	roots       map[string]struct{}
 	heads       map[string]struct{}
+
+	logSpout  *funnel.Spout[LogRecord]
+	logInlet  *LogInlet
+	failSpout *funnel.Spout[FailRecord]
+	failInlet *FailInlet
 }
 
 func NewFarm() *Farm {
+	logSpout := funnel.NewSpout(&LogRecordHandler{}, 100, time.Second)
+	failSpout := funnel.NewSpout(&FailRecordHandler{}, 100, time.Second)
+	logInlet := NewLogInlet(logSpout.GetQueue(), time.Second, "INFO")
+	failInlet := NewFailInlet(failSpout.GetQueue(), time.Second)
+
 	return &Farm{
 		plotsByName: make(map[string]PlotNode),
 		edges:       make(map[string]map[string]struct{}),
 		roots:       make(map[string]struct{}),
 		heads:       make(map[string]struct{}),
+
+		logSpout:  logSpout,
+		logInlet:  logInlet,
+		failSpout: failSpout,
+		failInlet: failInlet,
 	}
 }
 
@@ -237,16 +252,16 @@ func (f *Farm) Start(inputs map[string][]any) error {
 		return err
 	}
 
-	logSpout := funnel.NewSpout(&LogRecordHandler{}, 100, time.Second)
-	failSpout := funnel.NewSpout(&FailRecordHandler{}, 100, time.Second)
+	f.logSpout.Start()
+	f.failSpout.Start()
+	defer f.failSpout.Stop()
+	defer f.logSpout.Stop()
 
-	logSpout.Start()
-	failSpout.Start()
-	defer failSpout.Stop()
-	defer logSpout.Stop()
+	startTime := time.Now()
+	f.logInlet.StartFarm()
 
 	for _, plot := range f.plots {
-		plot.BindInlet(logSpout.GetQueue(), failSpout.GetQueue())
+		plot.BindInlet(f.logSpout.GetQueue(), f.failSpout.GetQueue())
 	}
 
 	for _, plot := range f.plots {
@@ -269,6 +284,8 @@ func (f *Farm) Start(inputs map[string][]any) error {
 	for _, plot := range f.plots {
 		plot.WaitAsync()
 	}
+
+	f.logInlet.EndFarm(time.Since(startTime).Seconds())
 
 	return nil
 }

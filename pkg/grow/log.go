@@ -107,27 +107,37 @@ func (l *LogInlet) log(level string, message string) {
 	})
 }
 
+// StartFarm 记录 Farm 启动日志。
+func (l *LogInlet) StartFarm() {
+	l.log("INFO", "Farm start.")
+}
+
+// EndFarm 记录 Farm 结束日志。
+func (l *LogInlet) EndFarm(useTime float64) {
+	l.log("INFO", fmt.Sprintf("Farm end. Use %.2fs.", useTime))
+}
+
 // StartPlot 记录 Plot 启动日志。
 func (l *LogInlet) StartPlot(plotName string, numTends int) {
 	l.log("INFO", fmt.Sprintf("'%s' start by %d tends.", plotName, numTends))
 }
 
 // EndPlot 记录 Plot 结束日志。
-func (l *LogInlet) EndPlot(plotName string, useTime float64, fruitNum, failedNum int) {
-	l.log("INFO", fmt.Sprintf("'%s' end. Use %.2fs. %d success, %d failed.", plotName, useTime, fruitNum, failedNum))
+func (l *LogInlet) EndPlot(plotName string, useTime float64, fruitNum, weedNum int) {
+	l.log("INFO", fmt.Sprintf("'%s' end. Use %.2fs. %d ripened, %d withered.", plotName, useTime, fruitNum, weedNum))
 }
 
-// TendSuccess 记录种子培育成功日志。
-func (l *LogInlet) TendSuccess(plotName string, seedRepr string, fruitRepr string, useTime float64) {
-	l.log("SUCCESS", fmt.Sprintf("In '%s', Seed %s successed. Fruit is %s. Use %.2fs.", plotName, seedRepr, fruitRepr, useTime))
+// SeedRipen 记录种子成熟日志。
+func (l *LogInlet) SeedRipen(plotName string, seedRepr string, fruitRepr string, useTime float64) {
+	l.log("SUCCESS", fmt.Sprintf("In '%s', Seed %s ripened. Fruit is %s. Use %.2fs.", plotName, seedRepr, fruitRepr, useTime))
 }
 
-// TendFail 记录种子培育失败日志。
-func (l *LogInlet) TendFail(plotName string, seedRepr string, err error) {
-	l.log("ERROR", fmt.Sprintf("In '%s', Seed %s failed: %v.", plotName, seedRepr, err))
+// SeedWither 记录种子枯萎日志。
+func (l *LogInlet) SeedWither(plotName string, seedRepr string, err error) {
+	l.log("ERROR", fmt.Sprintf("In '%s', Seed %s withered: %v.", plotName, seedRepr, err))
 }
 
-// TendRetry 记录种子培育重试日志。
-func (l *LogInlet) TendRetry(plotName string, seedRepr string, attempt int, err error) {
-	l.log("WARNING", fmt.Sprintf("In '%s', Seed %s attempt %d failed: %v. Retrying...", plotName, seedRepr, attempt, err))
+// SeedReplant 记录种子培育重试日志。
+func (l *LogInlet) SeedReplant(plotName string, seedRepr string, attempt int, err error) {
+	l.log("WARNING", fmt.Sprintf("In '%s', Seed %s attempt %d withered: %v. Replanting...", plotName, seedRepr, attempt, err))
 }

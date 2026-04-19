@@ -89,8 +89,8 @@ func NewFailInlet(ch chan<- FailRecord, timeout time.Duration) *FailInlet {
 	}
 }
 
-// TendFail 发送一条种子培育失败记录。
-func (f *FailInlet) TendFail(plotName string, seed any, err error) {
+// SeedWither 发送一条种子培育失败记录。
+func (f *FailInlet) SeedWither(plotName string, seed any, err error) {
 	f.Send(FailRecord{
 		FormatTime:   time.Now().Format("2006-01-02 15:04:05"),
 		PlotName:     plotName,

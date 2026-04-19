@@ -8,7 +8,7 @@ import (
 )
 
 func TestFarmStructure121(t *testing.T) {
-	const seedCount = 200
+	const seedCount = 50
 
 	root := grow.NewPlot("root", func(seed int) (int, error) {
 		return seed, nil

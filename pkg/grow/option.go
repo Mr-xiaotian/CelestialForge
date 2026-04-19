@@ -19,7 +19,7 @@ func defaultOptions() plotOptions {
 	return plotOptions{
 		numTends:   runtime.NumCPU(),
 		maxRetries: 1,
-		retryDelay: func(attempt int) time.Duration { return time.Second },
+		retryDelay: func(attempt int) time.Duration { return 0 },
 		retryIf:    func(error) bool { return true },
 	}
 }
