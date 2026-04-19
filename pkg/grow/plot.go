@@ -108,18 +108,18 @@ func (p *Plot[S, F]) addFruitChan(fruitChan chan Payload[F]) {
 // reportProgress 报告进度
 func (p *Plot[S, F]) reportProgress() {
 	completed := p.GetCompleted()
-	total := p.GetTotal()
+	seedNum := p.GetSeedNum()
 	for _, observer := range p.observers {
-		observer.OnProgress(completed, total)
+		observer.OnProgress(completed, seedNum)
 	}
 }
 
 // notifyStart 通知开始
 func (p *Plot[S, F]) notifyStart() {
 	p.state.Store(1)
-	total := p.GetTotal()
+	seedNum := p.GetSeedNum()
 	for _, observer := range p.observers {
-		observer.OnStart(total)
+		observer.OnStart(seedNum)
 	}
 }
 
@@ -127,9 +127,9 @@ func (p *Plot[S, F]) notifyStart() {
 func (p *Plot[S, F]) notifyFinish() {
 	p.state.Store(2)
 	completed := p.GetCompleted()
-	total := p.GetTotal()
+	seedNum := p.GetSeedNum()
 	for _, observer := range p.observers {
-		observer.OnFinish(completed, total)
+		observer.OnFinish(completed, seedNum)
 	}
 }
 
@@ -137,7 +137,7 @@ func (p *Plot[S, F]) notifyFinish() {
 
 // bearFruit 处理培育成功的种子
 func (p *Plot[S, F]) bearFruit(seedPayload Payload[S], fruit F, startTime time.Time) {
-	p.AddSuccess(1)
+	p.AddFruitNum(1)
 	p.reportProgress()
 
 	seedRepr := trunc(fmt.Sprintf("%+v", seedPayload.Value), 50)
@@ -153,7 +153,7 @@ func (p *Plot[S, F]) bearFruit(seedPayload Payload[S], fruit F, startTime time.T
 
 // bearWeed 处理培育失败的种子
 func (p *Plot[S, F]) bearWeed(seedPayload Payload[S], err error) {
-	p.AddFailed(1)
+	p.AddWeedNum(1)
 	p.reportProgress()
 
 	seedRepr := trunc(fmt.Sprintf("%+v", seedPayload.Value), 50)
@@ -210,7 +210,7 @@ func (p *Plot[S, F]) StopSpouts() {
 
 // seed 内部批量播种
 func (p *Plot[S, F]) seed(seeds []S) {
-	p.AddTotal(len(seeds))
+	p.AddSeedNum(len(seeds))
 	for idx, seed := range seeds {
 		p.seedChan <- Payload[S]{ID: idx, Value: seed, Source: p.name}
 	}
@@ -280,7 +280,7 @@ func (p *Plot[S, F]) sprout() {
 				continue
 			}
 			if seed.Source != p.name {
-				p.AddTotal(1)
+				p.AddSeedNum(1)
 			}
 			sem <- struct{}{} // 获取并发令牌
 			inFlight++
@@ -324,7 +324,7 @@ func (p *Plot[S, F]) Start(seeds []S) []Karma[S, F] {
 	karmas := p.harvest()
 	p.notifyFinish()
 
-	p.logInlet.EndPlot(p.name, time.Since(startTime).Seconds(), p.GetSuccess(), p.GetFailed())
+	p.logInlet.EndPlot(p.name, time.Since(startTime).Seconds(), p.GetFruitNum(), p.GetWeedNum())
 	p.StopSpouts()
 	return karmas
 }
@@ -346,7 +346,7 @@ func (p *Plot[S, F]) Seed(id int, seed S) {
 	p.wg.Add(1)
 	defer p.wg.Done()
 
-	p.AddTotal(1)
+	p.AddSeedNum(1)
 	p.seedChan <- Payload[S]{ID: id, Value: seed, Source: p.name}
 }
 
@@ -389,7 +389,7 @@ func (p *Plot[S, F]) StartAsync() {
 	p.sprout()
 	p.notifyFinish()
 
-	p.logInlet.EndPlot(p.name, time.Since(startTime).Seconds(), p.GetSuccess(), p.GetFailed())
+	p.logInlet.EndPlot(p.name, time.Since(startTime).Seconds(), p.GetFruitNum(), p.GetWeedNum())
 }
 
 // WaitAsync 等待异步 Plot 结束并清理资源
