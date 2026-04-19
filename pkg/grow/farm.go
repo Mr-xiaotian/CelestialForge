@@ -198,6 +198,7 @@ func (f *Farm) Connect(fromPlots []PlotNode, toPlots []PlotNode) error {
 			if err := from.ConnectTo(to); err != nil {
 				return err
 			}
+			to.AddUpstream(from.GetName())
 			f.addEdge(from.GetName(), to.GetName())
 		}
 	}

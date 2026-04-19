@@ -18,6 +18,7 @@ type PlotNode interface {
 	GetSeedChanAny() any
 
 	ConnectTo(next PlotNode) error
+	AddUpstream(name string)
 	BindInlet(logChan chan<- LogRecord, failChan chan<- FailRecord)
 
 	StartAsync()
@@ -40,6 +41,8 @@ type Plot[S any, F any] struct {
 
 	seedChan   chan Payload[S]
 	fruitChans []chan Payload[F]
+	upstreams  map[string]struct{}
+	sealedFrom map[string]struct{}
 
 	logSpout  *funnel.Spout[LogRecord]
 	logInlet  *LogInlet
@@ -76,6 +79,8 @@ func NewPlot[S any, F any](name string, cultivator func(S) (F, error), observers
 
 		seedChan:   make(chan Payload[S], o.numTends),
 		fruitChans: []chan Payload[F]{},
+		upstreams:  make(map[string]struct{}),
+		sealedFrom: make(map[string]struct{}),
 
 		ctx:    ctx,
 		cancel: cancel,
@@ -101,6 +106,32 @@ func (p *Plot[S, F]) BindInlet(logChan chan<- LogRecord, failChan chan<- FailRec
 
 func (p *Plot[S, F]) addFruitChan(fruitChan chan Payload[F]) {
 	p.fruitChans = append(p.fruitChans, fruitChan)
+}
+
+// AddUpstream 登记一个上游 plot 名称，供 seal 聚合判断使用。
+func (p *Plot[S, F]) AddUpstream(name string) {
+	if name == "" {
+		return
+	}
+	p.upstreams[name] = struct{}{}
+}
+
+func (p *Plot[S, F]) resetSeals() {
+	p.sealedFrom = make(map[string]struct{}, len(p.upstreams))
+}
+
+func (p *Plot[S, F]) markSealed(source string) bool {
+	if len(p.upstreams) == 0 {
+		return true
+	}
+	if source == "" {
+		return false
+	}
+	if _, ok := p.upstreams[source]; !ok {
+		return false
+	}
+	p.sealedFrom[source] = struct{}{}
+	return len(p.sealedFrom) == len(p.upstreams)
 }
 
 // ==== Observer Hooks ====
@@ -256,6 +287,7 @@ func (p *Plot[S, F]) tend(seedPayload Payload[S], sem chan struct{}, done chan s
 func (p *Plot[S, F]) sprout() {
 	sem := make(chan struct{}, p.numTends)  // 控制并发数
 	done := make(chan struct{}, p.numTends) // 控制tend完成信号
+	p.resetSeals()
 
 	ctxCancel := false
 	inputClosed := false
@@ -276,7 +308,7 @@ func (p *Plot[S, F]) sprout() {
 		select {
 		case seed := <-p.seedChan:
 			if seed.Signal == SignalSeal {
-				inputClosed = true
+				inputClosed = p.markSealed(seed.Source)
 				continue
 			}
 			if seed.Source != p.name {

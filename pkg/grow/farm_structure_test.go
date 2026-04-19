@@ -3,6 +3,7 @@ package grow_test
 import (
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/Mr-xiaotian/CelestialForge/pkg/grow"
 )
@@ -94,6 +95,96 @@ func TestFarmStructure121(t *testing.T) {
 	}
 	if int(midB.GetState()) != 2 {
 		t.Fatalf("midB state = %d, want 2", midB.GetState())
+	}
+	if int(head.GetState()) != 2 {
+		t.Fatalf("head state = %d, want 2", head.GetState())
+	}
+}
+
+func TestFarmStructure21FaninDifferentSpeed(t *testing.T) {
+	const seedCount = 80
+
+	rootFast := grow.NewPlot("rootFast", func(seed int) (int, error) {
+		return seed*10 + 1, nil
+	}, nil, grow.WithTends(8))
+
+	rootSlow := grow.NewPlot("rootSlow", func(seed int) (int, error) {
+		time.Sleep(2 * time.Millisecond)
+		return seed*10 + 2, nil
+	}, nil, grow.WithTends(4))
+
+	var (
+		mu      sync.Mutex
+		counts  = make(map[int]int, seedCount*2)
+		visited int
+	)
+
+	head := grow.NewPlot("head", func(seed int) (int, error) {
+		mu.Lock()
+		counts[seed]++
+		visited++
+		mu.Unlock()
+		return seed, nil
+	}, nil, grow.WithTends(8))
+
+	farm := grow.NewFarm()
+	if err := farm.AddPlot(rootFast, rootSlow, head); err != nil {
+		t.Fatalf("AddPlot() error = %v", err)
+	}
+	if err := farm.Connect([]grow.PlotNode{rootFast, rootSlow}, []grow.PlotNode{head}); err != nil {
+		t.Fatalf("Connect(roots -> head) error = %v", err)
+	}
+
+	fastInputs := make([]any, 0, seedCount)
+	slowInputs := make([]any, 0, seedCount)
+	for i := 0; i < seedCount; i++ {
+		fastInputs = append(fastInputs, i)
+		slowInputs = append(slowInputs, i)
+	}
+
+	if err := farm.Start(map[string][]any{
+		"rootFast": fastInputs,
+		"rootSlow": slowInputs,
+	}); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+
+	if !farm.IsRoot("rootFast") || !farm.IsRoot("rootSlow") {
+		t.Fatal("both roots should remain root")
+	}
+	if farm.IsHead("rootFast") || farm.IsHead("rootSlow") {
+		t.Fatal("roots should not remain head after connecting downstream")
+	}
+	if farm.IsRoot("head") {
+		t.Fatal("head should not be root after receiving from two upstreams")
+	}
+	if !farm.IsHead("head") {
+		t.Fatal("head should remain head")
+	}
+
+	if visited != seedCount*2 {
+		t.Fatalf("visited = %d, want %d", visited, seedCount*2)
+	}
+	if got := len(counts); got != seedCount*2 {
+		t.Fatalf("len(counts) = %d, want %d", got, seedCount*2)
+	}
+
+	for i := 0; i < seedCount; i++ {
+		fast := i*10 + 1
+		slow := i*10 + 2
+		if counts[fast] != 1 {
+			t.Fatalf("fanin fast result %d count = %d, want 1", fast, counts[fast])
+		}
+		if counts[slow] != 1 {
+			t.Fatalf("fanin slow result %d count = %d, want 1", slow, counts[slow])
+		}
+	}
+
+	if int(rootFast.GetState()) != 2 {
+		t.Fatalf("rootFast state = %d, want 2", rootFast.GetState())
+	}
+	if int(rootSlow.GetState()) != 2 {
+		t.Fatalf("rootSlow state = %d, want 2", rootSlow.GetState())
 	}
 	if int(head.GetState()) != 2 {
 		t.Fatalf("head state = %d, want 2", head.GetState())
