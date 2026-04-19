@@ -10,6 +10,7 @@ type Option func(*plotOptions)
 
 type plotOptions struct {
 	numTends   int
+	chanSize   int
 	maxRetries int
 	retryDelay func(attempt int) time.Duration
 	retryIf    func(error) bool
@@ -19,6 +20,7 @@ type plotOptions struct {
 func defaultOptions() plotOptions {
 	return plotOptions{
 		numTends:   runtime.NumCPU(),
+		chanSize:   runtime.NumCPU(),
 		maxRetries: 1,
 		retryDelay: func(attempt int) time.Duration { return 0 },
 		retryIf:    func(error) bool { return true },
@@ -30,6 +32,13 @@ func defaultOptions() plotOptions {
 func WithTends(n int) Option {
 	return func(o *plotOptions) {
 		o.numTends = n
+	}
+}
+
+// WithChanSize 设置通道大小。默认为 runtime.NumCPU()。
+func WithChanSize(n int) Option {
+	return func(o *plotOptions) {
+		o.chanSize = n
 	}
 }
 

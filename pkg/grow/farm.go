@@ -31,6 +31,7 @@ func NewFarm(name string, logLevel string) *Farm {
 
 	return &Farm{
 		name:        name,
+		plots:       make([]PlotNode, 0),
 		plotsByName: make(map[string]PlotNode),
 		edges:       make(map[string]map[string]struct{}),
 		roots:       make(map[string]struct{}),

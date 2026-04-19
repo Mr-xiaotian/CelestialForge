@@ -102,16 +102,16 @@ func TestFarmStructure121(t *testing.T) {
 }
 
 func TestFarmStructure21FaninDifferentSpeed(t *testing.T) {
-	const seedCount = 80
+	const seedCount = 50
 
 	rootFast := grow.NewPlot("rootFast", func(seed int) (int, error) {
 		return seed*10 + 1, nil
-	}, nil, grow.WithTends(8))
+	}, nil, grow.WithTends(4), grow.WithChanSize(100), grow.WithLogLevel("SUCCESS"))
 
 	rootSlow := grow.NewPlot("rootSlow", func(seed int) (int, error) {
-		time.Sleep(2 * time.Millisecond)
+		time.Sleep(time.Second)
 		return seed*10 + 2, nil
-	}, nil, grow.WithTends(4))
+	}, nil, grow.WithTends(4), grow.WithChanSize(100), grow.WithLogLevel("SUCCESS"))
 
 	var (
 		mu      sync.Mutex
@@ -125,7 +125,7 @@ func TestFarmStructure21FaninDifferentSpeed(t *testing.T) {
 		visited++
 		mu.Unlock()
 		return seed, nil
-	}, nil, grow.WithTends(8))
+	}, nil, grow.WithTends(8), grow.WithChanSize(100), grow.WithLogLevel("SUCCESS"))
 
 	farm := grow.NewFarm("structure_21_fanin_different_speed", "INFO")
 	if err := farm.AddPlot(rootFast, rootSlow, head); err != nil {

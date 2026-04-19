@@ -102,7 +102,7 @@ func (p *Plot[S, F]) InitLocalEnv() {
 
 // BindInlet 绑定 plot 运行时所需的四类通道。
 func (p *Plot[S, F]) BindInlet(logChan chan<- LogRecord, failChan chan<- FailRecord) {
-	p.logInlet = NewLogInlet(logChan, time.Second, "INFO")
+	p.logInlet = NewLogInlet(logChan, time.Second, p.logLevel)
 	p.failInlet = NewFailInlet(failChan, time.Second)
 }
 
