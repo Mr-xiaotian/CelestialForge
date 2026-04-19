@@ -16,16 +16,16 @@ func TestPlot_Async(t *testing.T) {
 	plot.StartSpouts()
 	fruits := map[int]int{}
 
-	go plot.StartAsync()
+	plot.StartAsync()
 	for seed := range 5 {
 		plot.Seed(seed, seed)
 	}
 	plot.Seal()
-	go plot.Harvest(func(res grow.Payload[int]) {
+	plot.Harvest(func(res grow.Payload[int]) {
 		fruits[res.Prev.(int)] = res.Value
 	}, 0)
-
 	plot.WaitAsync()
+
 	plot.StopSpouts()
 
 	if len(fruits) != 5 {

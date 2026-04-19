@@ -269,7 +269,7 @@ func (f *Farm) Start(inputs map[string][]any) error {
 	}
 
 	for _, plot := range f.plots {
-		go plot.StartAsync()
+		plot.StartAsync()
 	}
 
 	for name, seeds := range inputs {

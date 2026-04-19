@@ -35,6 +35,7 @@ type Plot[S any, F any] struct {
 	cultivator func(S) (F, error)
 	observers  []Observer
 	numTends   int
+	chanSize   int
 	maxRetries int
 	retryDelay func(attempt int) time.Duration
 	retryIf    func(error) bool
@@ -74,12 +75,13 @@ func NewPlot[S any, F any](name string, cultivator func(S) (F, error), observers
 		cultivator: cultivator,
 		observers:  observers,
 		numTends:   o.numTends,
+		chanSize:   o.chanSize,
 		maxRetries: o.maxRetries,
 		retryDelay: o.retryDelay,
 		retryIf:    o.retryIf,
 		logLevel:   o.logLevel,
 
-		seedChan:   make(chan Payload[S], o.numTends),
+		seedChan:   make(chan Payload[S], o.chanSize),
 		fruitChans: []chan Payload[F]{},
 		upstreams:  make(map[string]struct{}),
 		sealedFrom: make(map[string]struct{}),
@@ -91,7 +93,7 @@ func NewPlot[S any, F any](name string, cultivator func(S) (F, error), observers
 
 // InitLocalEnv 初始化本地环境，包括创建日志/失败 spout 并绑定 inlet。
 func (p *Plot[S, F]) InitLocalEnv() {
-	fruitChan := make(chan Payload[F], p.numTends)
+	fruitChan := make(chan Payload[F], p.chanSize)
 
 	p.logSpout = funnel.NewSpout(&LogRecordHandler{}, 100, time.Second)
 	p.failSpout = funnel.NewSpout(&FailRecordHandler{}, 100, time.Second)
@@ -396,16 +398,18 @@ func (p *Plot[S, F]) Seal() {
 // Harvest 逐个收获果实，阻塞直到收到 SignalSeal。
 func (p *Plot[S, F]) Harvest(sickle func(Payload[F]), chanIndex int) {
 	p.wg.Add(1)
-	defer p.wg.Done()
 
-	for res := range p.fruitChans[chanIndex] {
-		if res.Signal == SignalSeal {
-			break
+	go func() {
+		defer p.wg.Done()
+		for res := range p.fruitChans[chanIndex] {
+			if res.Signal == SignalSeal {
+				break
+			}
+			if sickle != nil {
+				sickle(res)
+			}
 		}
-		if sickle != nil {
-			sickle(res)
-		}
-	}
+	}()
 }
 
 // StartAsync 异步启动调度器，种子播入和果实收获由外部控制。
@@ -414,16 +418,18 @@ func (p *Plot[S, F]) Harvest(sickle func(Payload[F]), chanIndex int) {
 // 完成后需调用 WaitAsync 等待调度器及外部交互协程收尾。
 func (p *Plot[S, F]) StartAsync() {
 	p.wg.Add(1)
-	defer p.wg.Done()
 
-	p.logInlet.StartPlot(p.name, p.numTends)
-	startTime := time.Now()
+	go func() {
+		defer p.wg.Done()
+		p.logInlet.StartPlot(p.name, p.numTends)
+		startTime := time.Now()
 
-	p.notifyStart()
-	p.sprout()
-	p.notifyFinish()
+		p.notifyStart()
+		p.sprout()
+		p.notifyFinish()
 
-	p.logInlet.EndPlot(p.name, time.Since(startTime).Seconds(), p.GetFruitNum(), p.GetWeedNum())
+		p.logInlet.EndPlot(p.name, time.Since(startTime).Seconds(), p.GetFruitNum(), p.GetWeedNum())
+	}()
 }
 
 // WaitAsync 等待异步 Plot 结束并清理资源
