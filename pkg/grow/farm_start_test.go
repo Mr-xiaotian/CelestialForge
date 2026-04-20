@@ -53,22 +53,3 @@ func TestFarmStartLinear(t *testing.T) {
 		t.Fatalf("head state = %d, want 2", head.GetState())
 	}
 }
-
-func TestFarmStartRejectNonRootInput(t *testing.T) {
-	root := grow.NewPlot("root", func(seed int) (int, error) { return seed, nil }, nil)
-	head := grow.NewPlot("head", func(seed int) (int, error) { return seed, nil }, nil)
-
-	farm := grow.NewFarm("start_reject_non_root_input", "INFO")
-	if err := farm.AddPlot(root, head); err != nil {
-		t.Fatalf("AddPlot() error = %v", err)
-	}
-	if err := farm.Connect([]grow.PlotNode{root}, []grow.PlotNode{head}); err != nil {
-		t.Fatalf("Connect() error = %v", err)
-	}
-
-	if err := farm.Start(map[string][]any{
-		"head": {1},
-	}); err == nil {
-		t.Fatal("Start() expected non-root input error, got nil")
-	}
-}

@@ -53,8 +53,8 @@ type Plot[S any, F any] struct {
 	sealedFrom map[string]struct{}
 
 	logSpout  *funnel.Spout[LogRecord]
-	logInlet  *LogInlet
 	failSpout *funnel.Spout[FailRecord]
+	logInlet  *LogInlet
 	failInlet *FailInlet
 
 	ctx    context.Context
@@ -316,7 +316,7 @@ func (p *Plot[S, F]) sprout() {
 	inputClosed := false
 	inFlight := 0
 	shouldFinish := func() bool {
-		return ctxCancel || (inputClosed && inFlight == 0 && p.IsFinish())
+		return ctxCancel || (inputClosed && inFlight == 0)
 	}
 
 	for {
@@ -401,18 +401,12 @@ func (p *Plot[S, F]) SeedAny(id int, seed any) error {
 
 // Seed 播入单颗种子到 seedChan。
 func (p *Plot[S, F]) Seed(id int, seed S) {
-	p.wg.Add(1)
-	defer p.wg.Done()
-
 	p.AddSeedNum(1)
 	p.seedChan <- Payload[S]{ID: id, Value: seed, Source: p.name}
 }
 
 // Seal 向 seedChan 发送 SignalSeal，通知 sprout 不再有新种子。
 func (p *Plot[S, F]) Seal() {
-	p.wg.Add(1)
-	defer p.wg.Done()
-
 	p.seedChan <- Payload[S]{Signal: SignalSeal, Source: p.name}
 }
 

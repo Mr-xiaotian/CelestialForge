@@ -15,7 +15,6 @@ import (
 type FailRecord struct {
 	FormatTime   string
 	PlotName     string
-	SeedID       int
 	SeedString   string
 	ErrorMessage string
 }

@@ -21,8 +21,8 @@ type Farm struct {
 	heads       map[string]struct{}
 
 	logSpout  *funnel.Spout[LogRecord]
-	logInlet  *LogInlet
 	failSpout *funnel.Spout[FailRecord]
+	logInlet  *LogInlet
 	failInlet *FailInlet
 }
 
@@ -45,8 +45,8 @@ func NewFarm(name string, logLevel string) *Farm {
 		heads:       make(map[string]struct{}),
 
 		logSpout:  logSpout,
-		logInlet:  logInlet,
 		failSpout: failSpout,
+		logInlet:  logInlet,
 		failInlet: failInlet,
 	}
 }
@@ -60,45 +60,30 @@ func (f *Farm) PlotCount() int {
 
 // HasPlot 返回指定名称的 plot 是否已注册。
 func (f *Farm) HasPlot(name string) bool {
-	if f.plotsByName == nil {
-		return false
-	}
 	_, ok := f.plotsByName[name]
 	return ok
 }
 
 // GetPlot 按名称返回已注册的 plot，未找到时 ok 为 false。
 func (f *Farm) GetPlot(name string) (PlotNode, bool) {
-	if f.plotsByName == nil {
-		return nil, false
-	}
 	plot, ok := f.plotsByName[name]
 	return plot, ok
 }
 
 // IsRoot 判断指定 plot 是否为 root（无上游）。
 func (f *Farm) IsRoot(name string) bool {
-	if f.roots == nil {
-		return false
-	}
 	_, ok := f.roots[name]
 	return ok
 }
 
 // IsHead 判断指定 plot 是否为 head（无下游）。
 func (f *Farm) IsHead(name string) bool {
-	if f.heads == nil {
-		return false
-	}
 	_, ok := f.heads[name]
 	return ok
 }
 
 // Connected 返回 from → to 是否已建立连接。
 func (f *Farm) Connected(from, to string) bool {
-	if f.edges == nil {
-		return false
-	}
 	targets, ok := f.edges[from]
 	if !ok {
 		return false
@@ -243,15 +228,9 @@ func (f *Farm) Connect(fromPlots []PlotNode, toPlots []PlotNode) error {
 // validateStartInputs 校验输入参数：plot 必须已注册且为 root。
 func (f *Farm) validateStartInputs(inputs map[string][]any) error {
 	for name := range inputs {
-		plot, ok := f.plotsByName[name]
+		_, ok := f.plotsByName[name]
 		if !ok {
 			return fmt.Errorf("plot %q is not registered in farm", name)
-		}
-		if !f.IsRoot(name) {
-			return fmt.Errorf("plot %q is not a root plot", name)
-		}
-		if err := f.requireRegistered(plot); err != nil {
-			return err
 		}
 	}
 	return nil
