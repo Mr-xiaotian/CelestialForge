@@ -13,11 +13,14 @@ const (
 // 同时承载正常数据和控制信号，使数据流和控制流共用同一通道。
 // Signal 为 SignalNone 时为正常数据，为 SignalSeal 时为终止信号。
 type Payload[V any] struct {
+	// Signal与Seed通用
 	ID     int
-	Value  V
-	Prev   any
 	Signal int
 	Source string
+
+	// Seed使用
+	Value V
+	Prev  any
 }
 
 // Karma 种子与果实的配对，记录一颗种子培育后的完整结果。

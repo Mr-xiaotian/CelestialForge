@@ -44,7 +44,7 @@ type Plot[S any, F any] struct {
 
 	seedChan   chan Payload[S]
 	fruitChans []chan Payload[F]
-	upstreams map[string]struct{}
+	upstreams  map[string]struct{}
 
 	logSpout  *funnel.Spout[LogRecord]
 	failSpout *funnel.Spout[FailRecord]
@@ -235,9 +235,10 @@ func (p *Plot[S, F]) bearWeed(seedPayload Payload[S], err error, startTime time.
 	p.AddWeedNum(1)
 	p.reportProgress()
 
-	seedRepr := trunc(fmt.Sprintf("%+v", seedPayload.Value), 50)
 	seedString := fmt.Sprintf("%+v", seedPayload.Value)
-	p.logInlet.SeedWither(p.name, seedRepr, err, startTime)
+	seedRepr := trunc(seedString, 50)
+	useTime := time.Since(startTime).Seconds()
+	p.logInlet.SeedWither(p.name, seedRepr, err, useTime)
 	p.failInlet.SeedWither(p.name, seedString, err)
 }
 
@@ -277,7 +278,9 @@ func (p *Plot[S, F]) tend(seedPayload Payload[S], sem chan struct{}, done chan s
 		if !p.retryIf(err) {
 			break
 		}
-		p.logInlet.SeedReplant(p.name, seedRepr, attempt, err)
+		if attempt <= p.maxRetries {
+			p.logInlet.SeedReplant(p.name, seedRepr, attempt, err)
+		}
 		time.Sleep(p.retryDelay(attempt))
 	}
 
