@@ -11,7 +11,7 @@ import (
 
 // ==== Record ====
 
-// FailRecord 失败记录条目，序列化为 JSONL 写入文件。
+// FailRecord 单条失败记录，序列化为 JSONL 写入文件。
 type FailRecord struct {
 	FormatTime   string
 	PlotName     string
@@ -20,15 +20,16 @@ type FailRecord struct {
 	ErrorMessage string
 }
 
-// ==== Spout (RecordHandler) ====
+// ==== Record Handler (Spout) ====
 
-// FailRecordHandler 失败记录的 RecordHandler 实现，将失败信息以 JSONL 格式写入文件。
+// FailRecordHandler 失败记录的消费端处理器。
+// 实现 funnel.RecordHandler[FailRecord] 接口，将失败信息以 JSONL 格式写入文件。
 type FailRecordHandler struct {
 	FailPath string
 	FailFile *os.File
 }
 
-// BeforeStart 创建 fallback 目录并打开 JSONL 文件。
+// BeforeStart 创建 fallback/{date}/ 目录并打开 JSONL 文件（追加模式）。
 func (f *FailRecordHandler) BeforeStart() error {
 	var err error
 
@@ -47,7 +48,7 @@ func (f *FailRecordHandler) BeforeStart() error {
 	return nil
 }
 
-// HandleRecord 将失败记录序列化为 JSON 并追加写入文件。
+// HandleRecord 将失败记录序列化为 JSON 并追加写入文件（每条一行）。
 func (f *FailRecordHandler) HandleRecord(record FailRecord) error {
 	var err error
 	var b []byte
@@ -65,7 +66,7 @@ func (f *FailRecordHandler) HandleRecord(record FailRecord) error {
 	return nil
 }
 
-// AfterStop 关闭 JSONL 文件。
+// AfterStop 关闭 JSONL 文件句柄。
 func (f *FailRecordHandler) AfterStop() error {
 	err := f.FailFile.Close()
 	if err != nil {
@@ -77,7 +78,7 @@ func (f *FailRecordHandler) AfterStop() error {
 
 // ==== Inlet ====
 
-// FailInlet 失败记录生产端，内嵌 Inlet 并提供领域方法。
+// FailInlet 失败记录生产端。内嵌 funnel.Inlet，提供面向 Plot 的失败记录方法。
 type FailInlet struct {
 	funnel.Inlet[FailRecord]
 }
@@ -89,7 +90,9 @@ func NewFailInlet(ch chan<- FailRecord, timeout time.Duration) *FailInlet {
 	}
 }
 
-// SeedWither 发送一条种子培育失败记录。
+// ==== Fail Methods ====
+
+// SeedWither 发送一条种子培育失败记录，包含 plot 名称、种子值和错误信息。
 func (f *FailInlet) SeedWither(plotName string, seed any, err error) {
 	f.Send(FailRecord{
 		FormatTime:   time.Now().Format("2006-01-02 15:04:05"),

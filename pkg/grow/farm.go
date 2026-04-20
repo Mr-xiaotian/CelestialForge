@@ -7,8 +7,11 @@ import (
 	"github.com/Mr-xiaotian/CelestialForge/pkg/funnel"
 )
 
-// Farm 管理多节点静态图的注册与连接。
-// 当前仅负责持有节点、校验名称唯一性，并建立超边式连接。
+// ==== Struct ====
+
+// Farm 管理多个 Plot 组成的静态有向图。
+// 负责节点注册、名称唯一性校验、超边式连接建立，
+// 以及统一的 spout 管理和生命周期调度。
 type Farm struct {
 	name        string
 	plots       []PlotNode
@@ -23,6 +26,10 @@ type Farm struct {
 	failInlet *FailInlet
 }
 
+// ==== Constructor ====
+
+// NewFarm 创建一个 Farm 实例。
+// name 为 farm 名称（用于日志标识），logLevel 为全局日志级别。
 func NewFarm(name string, logLevel string) *Farm {
 	logSpout := funnel.NewSpout(&LogRecordHandler{}, 100, time.Second)
 	failSpout := funnel.NewSpout(&FailRecordHandler{}, 100, time.Second)
@@ -44,9 +51,9 @@ func NewFarm(name string, logLevel string) *Farm {
 	}
 }
 
-// ==== 查询接口 ====
+// ==== Getters ====
 
-// PlotCount 返回当前已注册的 plot 数量。
+// PlotCount 返回已注册的 plot 数量。
 func (f *Farm) PlotCount() int {
 	return len(f.plots)
 }
@@ -60,7 +67,7 @@ func (f *Farm) HasPlot(name string) bool {
 	return ok
 }
 
-// GetPlot 按名称返回已注册的 plot。
+// GetPlot 按名称返回已注册的 plot，未找到时 ok 为 false。
 func (f *Farm) GetPlot(name string) (PlotNode, bool) {
 	if f.plotsByName == nil {
 		return nil, false
@@ -69,8 +76,7 @@ func (f *Farm) GetPlot(name string) (PlotNode, bool) {
 	return plot, ok
 }
 
-// IsRoot 返回指定 plot 当前是否为 root。
-// root plot 没有任何上游。
+// IsRoot 判断指定 plot 是否为 root（无上游）。
 func (f *Farm) IsRoot(name string) bool {
 	if f.roots == nil {
 		return false
@@ -79,8 +85,7 @@ func (f *Farm) IsRoot(name string) bool {
 	return ok
 }
 
-// IsHead 返回指定 plot 当前是否为 head。
-// head plot 没有任何下游。
+// IsHead 判断指定 plot 是否为 head（无下游）。
 func (f *Farm) IsHead(name string) bool {
 	if f.heads == nil {
 		return false
@@ -89,10 +94,45 @@ func (f *Farm) IsHead(name string) bool {
 	return ok
 }
 
-// ==== 注册接口 ====
+// Connected 返回 from → to 是否已建立连接。
+func (f *Farm) Connected(from, to string) bool {
+	if f.edges == nil {
+		return false
+	}
+	targets, ok := f.edges[from]
+	if !ok {
+		return false
+	}
+	_, ok = targets[to]
+	return ok
+}
 
-// AddPlot 将一个或多个 plot 注册到 farm 中。
-// plot 名称必须唯一。
+// rootPlots 返回所有 root plot（无上游的入口节点）。
+func (f *Farm) rootPlots() []PlotNode {
+	roots := make([]PlotNode, 0, len(f.roots))
+	for name := range f.roots {
+		if plot, ok := f.plotsByName[name]; ok {
+			roots = append(roots, plot)
+		}
+	}
+	return roots
+}
+
+// headPlots 返回所有 head plot（无下游的末端节点）。
+func (f *Farm) headPlots() []PlotNode {
+	heads := make([]PlotNode, 0, len(f.heads))
+	for name := range f.heads {
+		if plot, ok := f.plotsByName[name]; ok {
+			heads = append(heads, plot)
+		}
+	}
+	return heads
+}
+
+// ==== Registration ====
+
+// AddPlot 将一个或多个 plot 注册到 farm。
+// plot 名称不能为空且必须唯一，注册时默认标记为 root 和 head。
 func (f *Farm) AddPlot(plots ...PlotNode) error {
 	for _, plot := range plots {
 		if plot == nil {
@@ -116,9 +156,23 @@ func (f *Farm) AddPlot(plots ...PlotNode) error {
 	return nil
 }
 
-// ==== 连接接口 ====
+// requireRegistered 确保 plot 已注册到 farm 中，用于连接前校验。
+func (f *Farm) requireRegistered(plot PlotNode) error {
+	if plot == nil {
+		return fmt.Errorf("plot is nil")
+	}
+	if f.plotsByName == nil {
+		return fmt.Errorf("plot %q is not registered in farm", plot.GetName())
+	}
+	if registered, ok := f.plotsByName[plot.GetName()]; !ok || registered != plot {
+		return fmt.Errorf("plot %q is not registered in farm", plot.GetName())
+	}
+	return nil
+}
 
-// uniquePlots 确保 plot 名称唯一。
+// ==== Connection ====
+
+// uniquePlots 对 plot 列表按名称去重，过滤 nil。
 func uniquePlots(plots []PlotNode) []PlotNode {
 	seen := make(map[string]struct{}, len(plots))
 	unique := make([]PlotNode, 0, len(plots))
@@ -136,20 +190,7 @@ func uniquePlots(plots []PlotNode) []PlotNode {
 	return unique
 }
 
-// requireRegistered 确保 plot 已注册到 farm 中。
-func (f *Farm) requireRegistered(plot PlotNode) error {
-	if plot == nil {
-		return fmt.Errorf("plot is nil")
-	}
-	if f.plotsByName == nil {
-		return fmt.Errorf("plot %q is not registered in farm", plot.GetName())
-	}
-	if registered, ok := f.plotsByName[plot.GetName()]; !ok || registered != plot {
-		return fmt.Errorf("plot %q is not registered in farm", plot.GetName())
-	}
-	return nil
-}
-
+// addEdge 记录一条 from → to 的有向边，并更新 root/head 状态。
 func (f *Farm) addEdge(from, to string) {
 	if f.edges[from] == nil {
 		f.edges[from] = make(map[string]struct{})
@@ -159,21 +200,9 @@ func (f *Farm) addEdge(from, to string) {
 	delete(f.roots, to)
 }
 
-// Connected 返回 from -> to 是否已建立连接。
-func (f *Farm) Connected(from, to string) bool {
-	if f.edges == nil {
-		return false
-	}
-	targets, ok := f.edges[from]
-	if !ok {
-		return false
-	}
-	_, ok = targets[to]
-	return ok
-}
-
-// Connect 将源组中的每个 plot 与目标组中的每个 plot 相连。
-// 这会形成一个“源组 x 目标组”的全连接，用于表达超边。
+// Connect 在源组和目标组之间建立全连接（笛卡尔积）。
+// 每条连接调用 from.ConnectTo(to) 将上游 fruitChan 接入下游 seedChan，
+// 并在下游登记上游名称用于 seal 聚合。
 func (f *Farm) Connect(fromPlots []PlotNode, toPlots []PlotNode) error {
 	fromUnique := uniquePlots(fromPlots)
 	toUnique := uniquePlots(toPlots)
@@ -209,28 +238,9 @@ func (f *Farm) Connect(fromPlots []PlotNode, toPlots []PlotNode) error {
 	return nil
 }
 
-// ==== 启动接口 ====
+// ==== Execution ====
 
-func (f *Farm) rootPlots() []PlotNode {
-	roots := make([]PlotNode, 0, len(f.roots))
-	for name := range f.roots {
-		if plot, ok := f.plotsByName[name]; ok {
-			roots = append(roots, plot)
-		}
-	}
-	return roots
-}
-
-func (f *Farm) headPlots() []PlotNode {
-	heads := make([]PlotNode, 0, len(f.heads))
-	for name := range f.heads {
-		if plot, ok := f.plotsByName[name]; ok {
-			heads = append(heads, plot)
-		}
-	}
-	return heads
-}
-
+// validateStartInputs 校验输入参数：plot 必须已注册且为 root。
 func (f *Farm) validateStartInputs(inputs map[string][]any) error {
 	for name := range inputs {
 		plot, ok := f.plotsByName[name]
@@ -248,9 +258,9 @@ func (f *Farm) validateStartInputs(inputs map[string][]any) error {
 }
 
 // Start 同步启动整张 farm 图。
-// inputs 按 plot 名称声明初始任务，仅允许注入 root plot。
-// 流程为：创建并启动全局 log/fail spout，绑定各 plot inlet，启动所有 plot，
-// 注入初始任务，封闭所有 root，等待所有 head，最后停止全局 spout。
+// inputs 按 plot 名称声明初始种子，仅允许注入 root plot。
+// 流程：启动全局 spout → 绑定各 plot inlet → 启动所有 plot →
+// 注入种子 → 封闭所有 root → 等待所有 plot 完成 → 停止 spout。
 func (f *Farm) Start(inputs map[string][]any) error {
 	if err := f.validateStartInputs(inputs); err != nil {
 		return err
