@@ -40,12 +40,7 @@ type Plot[S any, F any] struct {
 	name       string
 	cultivator func(S) (F, error)
 	observers  []Observer
-	numTends   int
-	chanSize   int
-	maxRetries int
-	retryDelay func(attempt int) time.Duration
-	retryIf    func(error) bool
-	logLevel   string
+	plotOptions
 
 	seedChan   chan Payload[S]
 	fruitChans []chan Payload[F]
@@ -77,15 +72,10 @@ func NewPlot[S any, F any](name string, cultivator func(S) (F, error), observers
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &Plot[S, F]{
-		name:       name,
-		cultivator: cultivator,
-		observers:  observers,
-		numTends:   o.numTends,
-		chanSize:   o.chanSize,
-		maxRetries: o.maxRetries,
-		retryDelay: o.retryDelay,
-		retryIf:    o.retryIf,
-		logLevel:   o.logLevel,
+		name:        name,
+		cultivator:  cultivator,
+		observers:   observers,
+		plotOptions: o,
 
 		seedChan:   make(chan Payload[S], o.chanSize),
 		fruitChans: []chan Payload[F]{},
