@@ -49,8 +49,7 @@ type Plot[S any, F any] struct {
 
 	seedChan   chan Payload[S]
 	fruitChans []chan Payload[F]
-	upstreams  map[string]struct{}
-	sealedFrom map[string]struct{}
+	upstreams map[string]struct{}
 
 	logSpout  *funnel.Spout[LogRecord]
 	failSpout *funnel.Spout[FailRecord]
@@ -91,7 +90,6 @@ func NewPlot[S any, F any](name string, cultivator func(S) (F, error), observers
 		seedChan:   make(chan Payload[S], o.chanSize),
 		fruitChans: []chan Payload[F]{},
 		upstreams:  make(map[string]struct{}),
-		sealedFrom: make(map[string]struct{}),
 
 		ctx:    ctx,
 		cancel: cancel,
@@ -160,15 +158,10 @@ func (p *Plot[S, F]) ConnectTo(next PlotNode) error {
 	return nil
 }
 
-// resetSeals 重置所有上游的 seal 状态，供 sprout 启动时调用。
-func (p *Plot[S, F]) resetSeals() {
-	p.sealedFrom = make(map[string]struct{}, len(p.upstreams))
-}
-
 // markSealed 标记一个上游 plot 为已 seal。
 // 当所有已登记上游都已 seal 时返回 true。
 // 无上游（root plot）时总是返回 true。
-func (p *Plot[S, F]) markSealed(source string) bool {
+func (p *Plot[S, F]) markSealed(source string, sealedFrom map[string]struct{}) bool {
 	if len(p.upstreams) == 0 {
 		return true
 	}
@@ -178,8 +171,8 @@ func (p *Plot[S, F]) markSealed(source string) bool {
 	if _, ok := p.upstreams[source]; !ok {
 		return false
 	}
-	p.sealedFrom[source] = struct{}{}
-	return len(p.sealedFrom) == len(p.upstreams)
+	sealedFrom[source] = struct{}{}
+	return len(sealedFrom) == len(p.upstreams)
 }
 
 // ==== Getters ====
@@ -311,7 +304,7 @@ func (p *Plot[S, F]) tend(seedPayload Payload[S], sem chan struct{}, done chan s
 func (p *Plot[S, F]) sprout() {
 	sem := make(chan struct{}, p.numTends)
 	done := make(chan struct{}, p.numTends)
-	p.resetSeals()
+	sealedFrom := make(map[string]struct{}, len(p.upstreams))
 
 	ctxCancel := false
 	inputClosed := false
@@ -332,7 +325,7 @@ func (p *Plot[S, F]) sprout() {
 		select {
 		case seed := <-p.seedChan:
 			if seed.Signal == SignalSeal {
-				inputClosed = p.markSealed(seed.Source)
+				inputClosed = p.markSealed(seed.Source, sealedFrom)
 				continue
 			}
 			if seed.Source != p.name {
