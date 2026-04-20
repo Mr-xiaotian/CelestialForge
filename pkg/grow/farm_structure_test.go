@@ -128,14 +128,7 @@ func TestFarmStructure121PartialFailure(t *testing.T) {
 		return seed*10 + 2, nil
 	}, nil, grow.WithTends(4))
 
-	var (
-		mu      sync.Mutex
-		results = make(map[int]int)
-	)
 	head := grow.NewPlot("head", func(seed int) (int, error) {
-		mu.Lock()
-		results[seed]++
-		mu.Unlock()
 		return seed, nil
 	}, nil, grow.WithTends(4))
 
@@ -161,9 +154,27 @@ func TestFarmStructure121PartialFailure(t *testing.T) {
 		t.Fatalf("Start() error = %v", err)
 	}
 
-	// midA 收到 10 个全部成功，midB 收到 10 个成功 5 个，head 共收到 15 个
-	if got := len(results); got != 15 {
-		t.Fatalf("len(results) = %d, want 15", got)
+	// root: 20 seed, 10 fruit, 10 weed
+	if root.GetFruitNum() != 10 {
+		t.Fatalf("root fruitNum = %d, want 10", root.GetFruitNum())
+	}
+	if root.GetWeedNum() != 10 {
+		t.Fatalf("root weedNum = %d, want 10", root.GetWeedNum())
+	}
+	// midA: 10 seed, 10 fruit, 0 weed
+	if midA.GetFruitNum() != 10 {
+		t.Fatalf("midA fruitNum = %d, want 10", midA.GetFruitNum())
+	}
+	// midB: 10 seed, 5 fruit, 5 weed
+	if midB.GetFruitNum() != 5 {
+		t.Fatalf("midB fruitNum = %d, want 5", midB.GetFruitNum())
+	}
+	if midB.GetWeedNum() != 5 {
+		t.Fatalf("midB weedNum = %d, want 5", midB.GetWeedNum())
+	}
+	// head: 15 seed (10 from midA + 5 from midB), all success
+	if head.GetFruitNum() != 15 {
+		t.Fatalf("head fruitNum = %d, want 15", head.GetFruitNum())
 	}
 
 	for _, p := range []grow.PlotNode{root, midA, midB, head} {
