@@ -12,65 +12,75 @@
 
 并发安全的种子进度计数器。嵌入到 `Plot` 中，供 tend 协程在种子培育完成时更新计数。
 
-| 字段      | 类型           | 说明                                 |
-| --------- | -------------- | ------------------------------------ |
-| `total`   | `atomic.Int64` | 种子总数，由 `AddTotal` 累加         |
-| `success` | `atomic.Int64` | 成功培育的种子数（原子计数）         |
-| `failed`  | `atomic.Int64` | 失败的种子数（原子计数）             |
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `seedNum` | `atomic.Int64` | 种子总数 |
+| `fruitNum` | `atomic.Int64` | 成功培育的种子数（果实） |
+| `weedNum` | `atomic.Int64` | 失败的种子数（杂草） |
 
-### 构造函数
+## 构造函数
 
-#### `NewCounter() *Counter`
+### `NewCounter() *Counter`
 
 创建并返回一个新的 `Counter` 实例，所有计数初始为零。
 
-### 方法
+## Setters
 
-#### `AddTotal(addNNum int)`
+### `SetSeedNum(seedNum int)`
 
-原子地将种子总数增加 `addNNum`。在 `seed()` 或 `Seed()` 方法中调用。
+原子地设置种子总数。
 
-#### `AddSuccess(addNNum int)`
+## Adders
 
-原子地将成功计数增加 `addNNum`。每当一个 tend 成功培育种子后调用。
+### `AddSeedNum(addNNum int)`
 
-#### `AddFailed(addNNum int)`
+原子地增加种子总数。
 
-原子地将失败计数增加 `addNNum`。每当一个 tend 培育种子出错后调用。
+### `AddFruitNum(addNNum int)`
 
-#### `GetTotal() int`
+原子地增加成功数（果实）。
+
+### `AddWeedNum(addNNum int)`
+
+原子地增加失败数（杂草）。
+
+## Getters
+
+### `GetSeedNum() int`
 
 返回种子总数。
 
-#### `GetSuccess() int`
+### `GetFruitNum() int`
 
-返回当前成功培育的种子数。
+返回成功数（果实）。
 
-#### `GetFailed() int`
+### `GetWeedNum() int`
 
-返回当前失败的种子数。
+返回失败数（杂草）。
 
-#### `GetCompleted() int`
+### `GetCompleted() int`
 
-返回已完成的种子总数（`success + failed`），不区分成功与失败。
+返回已完成总数（`fruitNum + weedNum`）。
 
-#### `IsFinish() bool`
+## Predicates
 
-判断所有种子是否已全部完成，即 `total > 0 && GetCompleted() == GetTotal()`。`Plot` 的 `sprout` 方法用此判断是否可以结束调度。
+### `IsFinish() bool`
+
+判断所有种子是否已全部完成，即 `GetCompleted() == GetSeedNum()`。`Plot` 的 `sprout` 方法用此判断是否可以结束调度。
 
 ## 使用示例
 
 ```go
 counter := grow.NewCounter()
-counter.AddTotal(100)
+counter.SetSeedNum(100)
 
 // 在 tend 协程中
-counter.AddSuccess(1)
+counter.AddFruitNum(1)
 // 或
-counter.AddFailed(1)
+counter.AddWeedNum(1)
 
 // 检查进度
-fmt.Printf("Progress: %d/%d\n", counter.GetCompleted(), counter.GetTotal())
+fmt.Printf("Progress: %d/%d\n", counter.GetCompleted(), counter.GetSeedNum())
 
 if counter.IsFinish() {
     fmt.Println("All seeds completed")
@@ -79,5 +89,5 @@ if counter.IsFinish() {
 
 ## 关联文件
 
-- [plot.md](plot.md) — `Counter` 作为嵌入字段存在于 `Plot` 中，由 `processFruit` 和 `handleWeed` 方法更新
+- [plot.md](plot.md) — `Counter` 作为嵌入字段存在于 `Plot` 中，由 `bearFruit` 和 `bearWeed` 方法更新
 - [observer.md](observer.md) — `Observer` 接口的 `OnProgress` 回调依赖 `Counter` 提供的完成数和总数

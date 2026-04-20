@@ -1,14 +1,12 @@
-# structs 包测试
+# symmetric_map_test
 
 > 源文件: `pkg/structs/symmetric_map_test.go`
 
 ## 概述
 
-`structs.SymmetricMap` 对称映射数据结构的综合测试套件，采用黑盒测试（`package structs_test`）。覆盖所有公开 API 的功能测试，包括基本的存取操作、自对（self-pair）处理、幂等性、重绑定（rebind）时的自动清理、删除、弹出、包含检查、视图方法、清空、panic 行为、字符串格式化以及多种构造方式。
+`structs.SymmetricMap` 对称映射数据结构的综合测试套件，采用黑盒测试（`package structs_test`）。覆盖所有公开 API 的功能测试，包括基本的存取操作、自对处理、幂等性、重绑定时的自动清理、删除、弹出、包含检查、视图方法、清空、panic 行为、字符串格式化以及多种构造方式。
 
-## 测试文件
-
-### `symmetric_map_test.go`
+## 测试函数
 
 | 测试函数 | 说明 |
 |---------|------|
@@ -27,17 +25,6 @@
 | `TestSymmetricMap_FromPairs` | 从 Pair 切片构造 |
 | `TestSymmetricMap_ConflictResolution` | 冲突解决策略 |
 
-## 使用示例
-
-```bash
-# 运行 structs 包测试
-go test -v ./pkg/structs/
-
-# 运行特定测试
-go test -v -run TestSymmetricMap_ConflictResolution ./pkg/structs/
-```
-
 ## 关联文件
 
-- [file_test.md](file_test.md) — file 包测试
-- [units_test.md](units_test.md) — units 包测试
+- [symmetric_map.md](symmetric_map.md) — `SymmetricMap` 实现
