@@ -13,12 +13,11 @@ import (
 // 负责节点注册、名称唯一性校验、超边式连接建立，
 // 以及统一的 spout 管理和生命周期调度。
 type Farm struct {
-	name        string
-	plots       []PlotNode
-	plotsByName map[string]PlotNode
-	edges       map[string]map[string]struct{}
-	roots       map[string]struct{}
-	heads       map[string]struct{}
+	name  string
+	plots map[string]PlotNode
+	edges map[string]map[string]struct{}
+	roots map[string]struct{}
+	heads map[string]struct{}
 
 	logSpout  *funnel.Spout[LogRecord]
 	failSpout *funnel.Spout[FailRecord]
@@ -37,12 +36,11 @@ func NewFarm(name string, logLevel string) *Farm {
 	failInlet := NewFailInlet(failSpout.GetQueue(), time.Second)
 
 	return &Farm{
-		name:        name,
-		plots:       make([]PlotNode, 0),
-		plotsByName: make(map[string]PlotNode),
-		edges:       make(map[string]map[string]struct{}),
-		roots:       make(map[string]struct{}),
-		heads:       make(map[string]struct{}),
+		name:  name,
+		plots: make(map[string]PlotNode),
+		edges: make(map[string]map[string]struct{}),
+		roots: make(map[string]struct{}),
+		heads: make(map[string]struct{}),
 
 		logSpout:  logSpout,
 		failSpout: failSpout,
@@ -60,13 +58,13 @@ func (f *Farm) PlotCount() int {
 
 // HasPlot 返回指定名称的 plot 是否已注册。
 func (f *Farm) HasPlot(name string) bool {
-	_, ok := f.plotsByName[name]
+	_, ok := f.plots[name]
 	return ok
 }
 
 // GetPlot 按名称返回已注册的 plot，未找到时 ok 为 false。
 func (f *Farm) GetPlot(name string) (PlotNode, bool) {
-	plot, ok := f.plotsByName[name]
+	plot, ok := f.plots[name]
 	return plot, ok
 }
 
@@ -96,7 +94,7 @@ func (f *Farm) Connected(from, to string) bool {
 func (f *Farm) rootPlots() []PlotNode {
 	roots := make([]PlotNode, 0, len(f.roots))
 	for name := range f.roots {
-		if plot, ok := f.plotsByName[name]; ok {
+		if plot, ok := f.plots[name]; ok {
 			roots = append(roots, plot)
 		}
 	}
@@ -107,7 +105,7 @@ func (f *Farm) rootPlots() []PlotNode {
 func (f *Farm) headPlots() []PlotNode {
 	heads := make([]PlotNode, 0, len(f.heads))
 	for name := range f.heads {
-		if plot, ok := f.plotsByName[name]; ok {
+		if plot, ok := f.plots[name]; ok {
 			heads = append(heads, plot)
 		}
 	}
@@ -128,12 +126,11 @@ func (f *Farm) AddPlot(plots ...PlotNode) error {
 		if name == "" {
 			return fmt.Errorf("plot name cannot be empty")
 		}
-		if _, exists := f.plotsByName[name]; exists {
+		if _, exists := f.plots[name]; exists {
 			return fmt.Errorf("plot %q already exists", name)
 		}
 
-		f.plots = append(f.plots, plot)
-		f.plotsByName[name] = plot
+		f.plots[name] = plot
 		f.roots[name] = struct{}{}
 		f.heads[name] = struct{}{}
 	}
@@ -146,10 +143,7 @@ func (f *Farm) requireRegistered(plot PlotNode) error {
 	if plot == nil {
 		return fmt.Errorf("plot is nil")
 	}
-	if f.plotsByName == nil {
-		return fmt.Errorf("plot %q is not registered in farm", plot.GetName())
-	}
-	if registered, ok := f.plotsByName[plot.GetName()]; !ok || registered != plot {
+	if registered, ok := f.plots[plot.GetName()]; !ok || registered != plot {
 		return fmt.Errorf("plot %q is not registered in farm", plot.GetName())
 	}
 	return nil
@@ -228,7 +222,7 @@ func (f *Farm) Connect(fromPlots []PlotNode, toPlots []PlotNode) error {
 // validateStartInputs 校验输入参数：plot 必须已注册且为 root。
 func (f *Farm) validateStartInputs(inputs map[string][]any) error {
 	for name := range inputs {
-		_, ok := f.plotsByName[name]
+		_, ok := f.plots[name]
 		if !ok {
 			return fmt.Errorf("plot %q is not registered in farm", name)
 		}
@@ -262,7 +256,7 @@ func (f *Farm) Start(inputs map[string][]any) error {
 	}
 
 	for name, seeds := range inputs {
-		plot := f.plotsByName[name]
+		plot := f.plots[name]
 		for _, seed := range seeds {
 			if err := plot.SeedAny(seed); err != nil {
 				return err
