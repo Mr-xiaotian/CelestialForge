@@ -253,8 +253,9 @@ func (p *Plot[S, F]) bearWeed(seedPayload Payload[S], err error, startTime time.
 	p.reportProgress()
 
 	seedRepr := trunc(fmt.Sprintf("%+v", seedPayload.Value), 50)
+	seedString := fmt.Sprintf("%+v", seedPayload.Value)
 	p.logInlet.SeedWither(p.name, seedRepr, err, startTime)
-	p.failInlet.SeedWither(p.name, seedPayload.Value, err)
+	p.failInlet.SeedWither(p.name, seedString, err)
 }
 
 // ==== Internal Pipeline ====

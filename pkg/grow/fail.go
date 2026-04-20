@@ -92,11 +92,11 @@ func NewFailInlet(ch chan<- FailRecord, timeout time.Duration) *FailInlet {
 // ==== Fail Methods ====
 
 // SeedWither 发送一条种子培育失败记录，包含 plot 名称、种子值和错误信息。
-func (f *FailInlet) SeedWither(plotName string, seed any, err error) {
+func (f *FailInlet) SeedWither(plotName string, seedString string, err error) {
 	f.Send(FailRecord{
 		FormatTime:   time.Now().Format("2006-01-02 15:04:05"),
 		PlotName:     plotName,
-		SeedString:   fmt.Sprintf("%+v", seed),
+		SeedString:   seedString,
 		ErrorMessage: fmt.Sprintf("%v", err),
 	})
 }
