@@ -18,7 +18,7 @@ func TestPlot_Async(t *testing.T) {
 
 	plot.StartAsync()
 	for seed := range 5 {
-		plot.Seed(seed, seed)
+		plot.Seed(seed)
 	}
 	plot.Seal()
 	plot.Harvest(func(res grow.Payload[int]) {

@@ -27,7 +27,7 @@ type PlotNode interface {
 
 	StartAsync()
 	WaitAsync()
-	SeedAny(id int, seed any) error
+	SeedAny(seed any) error
 	Seal()
 }
 
@@ -247,8 +247,8 @@ func (p *Plot[S, F]) bearWeed(seedPayload Payload[S], err error, startTime time.
 // seed 将种子切片逐个包装为 Payload 发送到 seedChan，完成后发送 SignalSeal。
 func (p *Plot[S, F]) seed(seeds []S) {
 	p.AddSeedNum(len(seeds))
-	for idx, seed := range seeds {
-		p.seedChan <- Payload[S]{ID: idx, Value: seed, Source: p.name}
+	for _, seed := range seeds {
+		p.seedChan <- Payload[S]{Value: seed, Source: p.name}
 	}
 	p.seedChan <- Payload[S]{Signal: SignalSeal, Source: p.name}
 }
@@ -377,19 +377,19 @@ func (p *Plot[S, F]) Start(seeds []S) []Karma[S, F] {
 
 // SeedAny 以 any 类型播入单颗种子，内部做类型断言。
 // 供 Farm 统一注入初始任务时使用。
-func (p *Plot[S, F]) SeedAny(id int, seed any) error {
+func (p *Plot[S, F]) SeedAny(seed any) error {
 	typedSeed, ok := seed.(S)
 	if !ok {
 		return fmt.Errorf("plot %q seed type mismatch: got %T", p.name, seed)
 	}
-	p.Seed(id, typedSeed)
+	p.Seed(typedSeed)
 	return nil
 }
 
 // Seed 播入单颗种子到 seedChan。
-func (p *Plot[S, F]) Seed(id int, seed S) {
+func (p *Plot[S, F]) Seed(seed S) {
 	p.AddSeedNum(1)
-	p.seedChan <- Payload[S]{ID: id, Value: seed, Source: p.name}
+	p.seedChan <- Payload[S]{Value: seed, Source: p.name}
 }
 
 // Seal 向 seedChan 发送 SignalSeal，通知 sprout 不再有新种子。

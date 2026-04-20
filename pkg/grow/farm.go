@@ -263,8 +263,8 @@ func (f *Farm) Start(inputs map[string][]any) error {
 
 	for name, seeds := range inputs {
 		plot := f.plotsByName[name]
-		for idx, seed := range seeds {
-			if err := plot.SeedAny(idx, seed); err != nil {
+		for _, seed := range seeds {
+			if err := plot.SeedAny(seed); err != nil {
 				return err
 			}
 		}
