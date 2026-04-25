@@ -49,7 +49,7 @@ func TestFarmStructure121(t *testing.T) {
 	}
 
 	inputs := make([]any, 0, seedCount)
-	for i := 0; i < seedCount; i++ {
+	for i := range seedCount {
 		inputs = append(inputs, i)
 	}
 
@@ -76,7 +76,7 @@ func TestFarmStructure121(t *testing.T) {
 		t.Fatalf("len(counts) = %d, want %d", got, seedCount*2)
 	}
 
-	for i := 0; i < seedCount; i++ {
+	for i := range seedCount {
 		a := i*10 + 1
 		b := i*10 + 2
 
@@ -144,7 +144,7 @@ func TestFarmStructure121PartialFailure(t *testing.T) {
 	}
 
 	inputs := make([]any, 0, seedCount)
-	for i := 0; i < seedCount; i++ {
+	for i := range seedCount {
 		inputs = append(inputs, i)
 	}
 
@@ -243,7 +243,7 @@ func TestFarmStructureDisconnectedComponents(t *testing.T) {
 	inputsA := make([]any, 0, seedCount)
 	inputsB1 := make([]any, 0, seedCount)
 	inputsB2 := make([]any, 0, seedCount)
-	for i := 0; i < seedCount; i++ {
+	for i := range seedCount {
 		inputsA = append(inputsA, i)
 		inputsB1 = append(inputsB1, i)
 		inputsB2 = append(inputsB2, i)
@@ -261,7 +261,7 @@ func TestFarmStructureDisconnectedComponents(t *testing.T) {
 	if got := len(resultsA); got != seedCount {
 		t.Fatalf("len(resultsA) = %d, want %d", got, seedCount)
 	}
-	for i := 0; i < seedCount; i++ {
+	for i := range seedCount {
 		v := i*10 + 1
 		if resultsA[v] != 2 {
 			t.Fatalf("resultsA[%d] = %d, want 2 (one from each mid)", v, resultsA[v])
@@ -272,7 +272,7 @@ func TestFarmStructureDisconnectedComponents(t *testing.T) {
 	if got := len(resultsB); got != seedCount*2 {
 		t.Fatalf("len(resultsB) = %d, want %d", got, seedCount*2)
 	}
-	for i := 0; i < seedCount; i++ {
+	for i := range seedCount {
 		b1 := i*10 + 3
 		b2 := i*10 + 4
 		if resultsB[b1] != 1 {
@@ -327,7 +327,7 @@ func TestFarmStructure21FaninDifferentSpeed(t *testing.T) {
 
 	fastInputs := make([]any, 0, seedCount)
 	slowInputs := make([]any, 0, seedCount)
-	for i := 0; i < seedCount; i++ {
+	for i := range seedCount {
 		fastInputs = append(fastInputs, i)
 		slowInputs = append(slowInputs, i)
 	}
@@ -359,7 +359,7 @@ func TestFarmStructure21FaninDifferentSpeed(t *testing.T) {
 		t.Fatalf("len(counts) = %d, want %d", got, seedCount*2)
 	}
 
-	for i := 0; i < seedCount; i++ {
+	for i := range seedCount {
 		fast := i*10 + 1
 		slow := i*10 + 2
 		if counts[fast] != 1 {

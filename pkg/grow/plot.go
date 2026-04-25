@@ -401,10 +401,8 @@ func (p *Plot[S, F]) Seal() {
 // chanIndex 指定从哪个 fruitChan 读取（standalone 模式固定为 0）。
 // 阻塞直到收到 SignalSeal。
 func (p *Plot[S, F]) Harvest(sickle func(Payload[F]), chanIndex int) {
-	p.wg.Add(1)
 
-	go func() {
-		defer p.wg.Done()
+	p.wg.Go(func() {
 		for res := range p.fruitChans[chanIndex] {
 			if res.Signal == SignalSeal {
 				break
@@ -413,7 +411,7 @@ func (p *Plot[S, F]) Harvest(sickle func(Payload[F]), chanIndex int) {
 				sickle(res)
 			}
 		}
-	}()
+	})
 }
 
 // StartAsync 异步启动 sprout 调度器。
@@ -421,10 +419,8 @@ func (p *Plot[S, F]) Harvest(sickle func(Payload[F]), chanIndex int) {
 // 外部通过 Seed 播种、Seal 终止、Harvest 收获。
 // 完成后需调用 WaitAsync 等待所有协程退出。
 func (p *Plot[S, F]) StartAsync() {
-	p.wg.Add(1)
 
-	go func() {
-		defer p.wg.Done()
+	p.wg.Go(func() {
 		p.logInlet.StartPlot(p.name, p.numTends)
 		startTime := time.Now()
 
@@ -433,7 +429,7 @@ func (p *Plot[S, F]) StartAsync() {
 		p.notifyFinish()
 
 		p.logInlet.EndPlot(p.name, time.Since(startTime).Seconds(), p.GetFruitNum(), p.GetWeedNum())
-	}()
+	})
 }
 
 // WaitAsync 等待异步 Plot 的所有协程（sprout、Harvest、Seed、Seal）退出。
