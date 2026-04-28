@@ -9,7 +9,7 @@ import (
 )
 
 func TestFarmStartLinear(t *testing.T) {
-	root := grow.NewPlot("root", func(seed int) (int, error) { return seed * 2, nil }, nil, grow.WithTends(2))
+	root := grow.NewPlot("root", func(seed int) (int, error) { return seed * 2, nil }, grow.WithTends(2))
 
 	var (
 		mu      sync.Mutex
@@ -20,7 +20,7 @@ func TestFarmStartLinear(t *testing.T) {
 		results = append(results, seed)
 		mu.Unlock()
 		return seed, nil
-	}, nil, grow.WithTends(2))
+	}, grow.WithTends(2))
 
 	farm := grow.NewFarm("start_linear", "INFO")
 	if err := farm.AddPlot(root, head); err != nil {

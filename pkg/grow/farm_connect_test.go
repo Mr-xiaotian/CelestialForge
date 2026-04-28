@@ -8,8 +8,8 @@ import (
 
 func TestFarmAddPlot(t *testing.T) {
 	farm := grow.NewFarm("add_plot", "INFO")
-	plotA := grow.NewPlot("A", func(seed int) (int, error) { return seed, nil }, nil)
-	plotB := grow.NewPlot("B", func(seed int) (int, error) { return seed, nil }, nil)
+	plotA := grow.NewPlot("A", func(seed int) (int, error) { return seed, nil })
+	plotB := grow.NewPlot("B", func(seed int) (int, error) { return seed, nil })
 
 	if err := farm.AddPlot(plotA, plotB); err != nil {
 		t.Fatalf("AddPlot() error = %v", err)
@@ -40,8 +40,8 @@ func TestFarmAddPlot(t *testing.T) {
 
 func TestFarmAddPlotDuplicateName(t *testing.T) {
 	farm := grow.NewFarm("add_plot_duplicate_name", "INFO")
-	plotA1 := grow.NewPlot("A", func(seed int) (int, error) { return seed, nil }, nil)
-	plotA2 := grow.NewPlot("A", func(seed int) (int, error) { return seed, nil }, nil)
+	plotA1 := grow.NewPlot("A", func(seed int) (int, error) { return seed, nil })
+	plotA2 := grow.NewPlot("A", func(seed int) (int, error) { return seed, nil })
 
 	if err := farm.AddPlot(plotA1); err != nil {
 		t.Fatalf("AddPlot(first) error = %v", err)
@@ -53,9 +53,9 @@ func TestFarmAddPlotDuplicateName(t *testing.T) {
 
 func TestFarmConnectHyperEdge(t *testing.T) {
 	farm := grow.NewFarm("connect_hyper_edge", "INFO")
-	source := grow.NewPlot("source", func(seed int) (int, error) { return seed * 2, nil }, nil)
-	targetA := grow.NewPlot("targetA", func(seed int) (int, error) { return seed, nil }, nil)
-	targetB := grow.NewPlot("targetB", func(seed int) (int, error) { return seed, nil }, nil)
+	source := grow.NewPlot("source", func(seed int) (int, error) { return seed * 2, nil })
+	targetA := grow.NewPlot("targetA", func(seed int) (int, error) { return seed, nil })
+	targetB := grow.NewPlot("targetB", func(seed int) (int, error) { return seed, nil })
 
 	if err := farm.AddPlot(source, targetA, targetB); err != nil {
 		t.Fatalf("AddPlot() error = %v", err)
@@ -90,8 +90,8 @@ func TestFarmConnectHyperEdge(t *testing.T) {
 
 func TestFarmConnectTypeMismatch(t *testing.T) {
 	farm := grow.NewFarm("connect_type_mismatch", "INFO")
-	source := grow.NewPlot("source", func(seed int) (int, error) { return seed, nil }, nil)
-	target := grow.NewPlot("target", func(seed string) (string, error) { return seed, nil }, nil)
+	source := grow.NewPlot("source", func(seed int) (int, error) { return seed, nil })
+	target := grow.NewPlot("target", func(seed string) (string, error) { return seed, nil })
 
 	if err := farm.AddPlot(source, target); err != nil {
 		t.Fatalf("AddPlot() error = %v", err)

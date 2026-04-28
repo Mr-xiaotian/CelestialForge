@@ -11,7 +11,7 @@ func TestPlot_Async(t *testing.T) {
 		return seed * 2, nil
 	}
 
-	plot := grow.NewPlot("test_async", cultivator, nil, grow.WithTends(3))
+	plot := grow.NewPlot("test_async", cultivator, grow.WithTends(3))
 	plot.InitLocalEnv()
 	plot.StartSpouts()
 	fruits := map[int]int{}
