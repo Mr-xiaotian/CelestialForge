@@ -107,13 +107,14 @@ Farm 管理 Plot 时使用的统一接口，擦除泛型参数使 Farm 可以用
 
 ```go
 // Standalone 同步模式
-plot := grow.NewPlot("hasher", hashFunc, []grow.Observer{grow.NewProgressBar("Hashing")},
+plot := grow.NewPlot("hasher", hashFunc,
     grow.WithTends(8),
 )
+plot.AddObserver(grow.NewProgressBar("Hashing"))
 karmas := plot.Start(files)
 
 // Standalone 异步模式
-plot := grow.NewPlot("worker", processFunc, nil, grow.WithTends(4))
+plot := grow.NewPlot("worker", processFunc, grow.WithTends(4))
 plot.InitLocalEnv()
 plot.StartSpouts()
 plot.StartAsync()

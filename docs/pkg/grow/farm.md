@@ -87,8 +87,8 @@
 
 ```go
 // 创建 plot
-plotA := grow.NewPlot("str2int", strconv.Atoi, nil, grow.WithTends(4))
-plotB := grow.NewPlot("int2str", strconv.Itoa, nil, grow.WithTends(4))
+plotA := grow.NewPlot("str2int", strconv.Atoi, grow.WithTends(4))
+plotB := grow.NewPlot("int2str", strconv.Itoa, grow.WithTends(4))
 
 // 创建 farm 并注册
 farm := grow.NewFarm("pipeline", "INFO")
