@@ -1,5 +1,6 @@
 # units.time
 
+> 最后更新日期: 2026/06/28
 > 源文件: `pkg/units/time.go`
 
 ## 概述
@@ -56,12 +57,16 @@ func ParseHumanTime(text string) (HumanTime, error)
 ```go
 package main
 
-import "celestialforge/pkg/units"
+import (
+	"fmt"
+
+	"github.com/Mr-xiaotian/CelestialForge/pkg/units"
+)
 
 func main() {
 	// 创建 HumanTime
 	duration := units.NewHumanTime(90061.5) // 1天 1小时 1分钟 1.5秒
-	fmt.Println(duration)                   // "1d 1h 1m 1.5s"
+	fmt.Println(duration)                   // "1d 1h 1m 1.50s"
 
 	// 自定义格式化
 	fmt.Println(duration.Format(0, false))  // "1d 1h 1m 2s"（精度为0，四舍五入）

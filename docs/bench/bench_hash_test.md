@@ -1,5 +1,7 @@
-# bench.BenchmarkFileHash
+# bench_hash_test
 
+> 最后更新日期: 2026/06/28
+>
 > 源文件: `bench/bench_hash_test.go`
 
 ## 概述
@@ -8,9 +10,9 @@
 
 ## 类型/函数
 
-### `generateTempFile(size int64) (string, error)`
+### `generateTempFile(dir string, size int64) (string, error)`
 
-创建指定大小的临时文件，内容为随机数据。使用 32KB 的写入缓冲区逐块写入，确保高效生成大文件。返回临时文件路径供基准测试使用。
+在指定目录下创建指定大小的临时文件，内容为随机数据。使用 32KB 的写入缓冲区逐块写入，确保高效生成大文件。返回临时文件路径供基准测试使用。
 
 ### `BenchmarkFileHash(b *testing.B)`
 
@@ -46,5 +48,5 @@ go test -bench=BenchmarkFileHash/10MB -benchmem ./bench/
 
 ## 关联文件
 
-- [../tests/file_test.md](../tests/file_test.md) — file 包的功能测试，包含 SHA1 哈希正确性验证
+- [../pkg/file/hash_test.md](../pkg/file/hash_test.md) — `file` 包哈希功能的测试，包含 SHA1 哈希正确性验证
 - [../cmd/debug/main.md](../cmd/debug/main.md) — debug_hash 函数提供 MD5 哈希的手动调试

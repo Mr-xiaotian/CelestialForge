@@ -1,5 +1,6 @@
 # funnel.Inlet
 
+> 最后更新日期: 2026/06/28
 > 源文件: `pkg/funnel/inlet.go`
 
 ## 概述
@@ -53,7 +54,7 @@ import (
     "fmt"
     "time"
 
-    "your_module/pkg/funnel"
+    "github.com/Mr-xiaotian/CelestialForge/pkg/funnel"
 )
 
 func main() {

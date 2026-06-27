@@ -1,5 +1,6 @@
 # units.bytes
 
+> 最后更新日期: 2026/06/28
 > 源文件: `pkg/units/bytes.go`
 
 ## 概述
@@ -56,7 +57,11 @@ func ParseHumanBytes(text string) (HumanBytes, error)
 ```go
 package main
 
-import "celestialforge/pkg/units"
+import (
+	"fmt"
+
+	"github.com/Mr-xiaotian/CelestialForge/pkg/units"
+)
 
 func main() {
 	// 创建 HumanBytes

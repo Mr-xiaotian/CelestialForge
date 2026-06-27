@@ -1,5 +1,6 @@
 # funnel.Spout
 
+> 最后更新日期: 2026/06/28
 > 源文件: `pkg/funnel/spout.go`
 
 ## 概述
@@ -32,9 +33,9 @@
 |-----------|-------------------------|----------------------------------------|
 | `ch`      | `chan T`                | 内部缓冲通道，生产端通过此通道写入记录 |
 | `ctx`     | `context.Context`       | 用于取消消费循环的上下文               |
-| `cancel`  | `context.CancelFunc`    | 取消函数，由 `Stop` 调用               |
+| `cancel`  | `context.CancelFunc`    | 取消函数，由 `Stop` 在超时场景下调用             |
 | `wg`      | `sync.WaitGroup`        | 用于等待消费循环退出                   |
-| `timeout` | `time.Duration`         | 超时控制                               |
+| `timeout` | `time.Duration`         | 关闭时的最大等待时间                           |
 | `handler` | `RecordHandler[T]`      | 记录处理器实例                         |
 
 ### `NewSpout[T any](handler RecordHandler[T], bufferSize int, timeout time.Duration) *Spout[T]`
@@ -45,7 +46,7 @@
 
 - `handler` — 实现 `RecordHandler[T]` 接口的处理器，负责记录的实际处理逻辑。
 - `bufferSize` — 内部通道的缓冲大小，控制生产端在消费端处理速度不足时可以积压的记录数。
-- `timeout` — 超时控制时间。
+- `timeout` — 关闭 `Stop` 时的最大等待时间。
 
 ### `(*Spout[T]) GetQueue() chan<- T`
 
@@ -67,9 +68,12 @@
 
 优雅停止消费端。执行流程：
 
-1. 取消上下文，通知消费循环退出。
-2. 通过 `wg.Wait()` 等待消费循环完成所有已读取记录的处理。
-3. 调用 `handler.AfterStop()` 进行资源清理。
+1. 关闭内部通道 `ch`，通知消费循环在已缓冲记录处理完毕后退出。
+2. 通过 `wg.Wait()` 等待消费循环完成，最多等待 `timeout`。
+3. 若等待超时，则调用 `cancel()` 强制取消，并返回 `shutdown timeout` 错误。
+4. 无论是否超时，都会调用 `handler.AfterStop()` 进行资源清理。
+
+> 注意：`Stop` 的返回值只反映关闭是否超时；`handler.AfterStop()` 的返回值不会被返回，需要调用方在 Handler 内部自行处理。
 
 ## 使用示例
 
@@ -80,7 +84,7 @@ import (
     "fmt"
     "time"
 
-    "your_module/pkg/funnel"
+    "github.com/Mr-xiaotian/CelestialForge/pkg/funnel"
 )
 
 // 实现 RecordHandler 接口

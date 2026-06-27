@@ -1,10 +1,11 @@
 # cmd/duplicate.main
 
+> 最后更新日期: 2026/06/28
 > 源文件: `cmd/duplicate/main.go`
 
 ## 概述
 
-这是一个正式的命令行工具，用于扫描指定目录下的重复文件并生成报告。通过命令行参数控制扫描路径、输出文件路径和并发工作线程数。底层调用 `pkg/file` 包的 `ScanDuplicateFile` 函数执行实际的重复文件检测，并将结果格式化输出到指定的报告文件中。
+这是一个正式的命令行工具，用于扫描指定目录下的重复文件并生成报告。通过命令行参数控制扫描路径、输出文件路径和并发工作线程数。底层调用 `pkg/file` 包的 `ScanDuplicateFile` 函数执行实际的重复文件检测，并通过 `DuplicateReport` 将结果格式化输出到指定的报告文件中。
 
 ## 类型/函数
 
@@ -14,7 +15,8 @@
 
 1. 通过 `flag` 包解析三个命令行参数
 2. 调用 `file.ScanDuplicateFile` 执行扫描
-3. 将扫描结果写入指定的输出文件
+3. 调用 `file.DuplicateReport` 生成格式化报告
+4. 将报告写入指定的输出文件
 
 **命令行参数：**
 
@@ -43,5 +45,6 @@ go build -o duplicate cmd/duplicate/main.go
 
 ## 关联文件
 
-- [../../tests/file_test.md](../../tests/file_test.md) — 包含 TestDuplicateReport 和 TestDuplicateReportEmpty 测试
-- [../debug/main.md](../debug/main.md) — 调试入口中的 debug_duplicate 提供类似功能
+- [../../pkg/file/duplicate.md](../../pkg/file/duplicate.md) — `ScanDuplicateFile` 与 `DuplicateReport` 实现
+- [../../pkg/file/duplicate_test.md](../../pkg/file/duplicate_test.md) — 包含 `TestDuplicateReport` 和 `TestDuplicateReportEmpty` 测试
+- [../debug/main.md](../debug/main.md) — 调试入口中的 `debug_duplicate` 提供类似功能

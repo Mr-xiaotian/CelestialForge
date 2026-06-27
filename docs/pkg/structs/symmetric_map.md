@@ -1,5 +1,6 @@
 # structs.symmetric_map
 
+> 最后更新日期: 2026/06/28
 > 源文件: `pkg/structs/symmetric_map.go`
 
 ## 概述
@@ -67,7 +68,11 @@
 ```go
 package main
 
-import "celestialforge/pkg/structs"
+import (
+	"fmt"
+
+	"github.com/Mr-xiaotian/CelestialForge/pkg/structs"
+)
 
 func main() {
 	// 创建对称映射（不允许自配对）
@@ -108,4 +113,4 @@ func main() {
 
 ## 关联文件
 
-- [../../tests/structs_test.md](../../tests/structs_test.md) — SymmetricMap 的测试文件
+- [symmetric_map_test.md](symmetric_map_test.md) — `SymmetricMap` 的测试文件

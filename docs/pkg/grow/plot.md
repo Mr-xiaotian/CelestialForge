@@ -1,5 +1,7 @@
 # grow.Plot
 
+> 最后更新日期: 2026/06/28
+
 > 源文件: `pkg/grow/plot.go`
 
 ## 概述
@@ -22,7 +24,7 @@ Farm 管理 Plot 时使用的统一接口，擦除泛型参数使 Farm 可以用
 | `BindInlet(logChan, failChan)` | 绑定日志和失败记录通道 |
 | `StartAsync()` | 异步启动 |
 | `WaitAsync()` | 等待异步完成 |
-| `SeedAny(id int, seed any) error` | 弱类型播种 |
+| `SeedAny(seed any) error` | 弱类型播种 |
 | `Seal()` | 发送终止信号 |
 
 ## 类型
@@ -36,16 +38,10 @@ Farm 管理 Plot 时使用的统一接口，擦除泛型参数使 Farm 可以用
 | `name` | `string` | plot 名称，在 Farm 中需唯一 |
 | `cultivator` | `func(S) (F, error)` | 培育函数 |
 | `observers` | `[]Observer` | 进度观察者列表 |
-| `numTends` | `int` | 最大并发 tend 数量 |
-| `chanSize` | `int` | seedChan/fruitChan 缓冲区大小 |
-| `maxRetries` | `int` | 最大重试次数（不含首次） |
-| `retryDelay` | `func(attempt int) time.Duration` | 重试间隔策略 |
-| `retryIf` | `func(error) bool` | 错误过滤器 |
-| `logLevel` | `string` | 日志最低级别 |
+| `plotOptions` | | 嵌入的配置选项（含 numTends、chanSize、maxRetries、retryDelay、retryIf、logLevel） |
 | `seedChan` | `chan Payload[S]` | 种子输入通道 |
 | `fruitChans` | `[]chan Payload[F]` | 果实输出通道列表（多下游 fan-out） |
 | `upstreams` | `map[string]struct{}` | 已登记上游名称集合 |
-| `sealedFrom` | `map[string]struct{}` | 已收到 seal 信号的上游集合 |
 | `logSpout` / `logInlet` | | 日志系统（standalone 模式拥有 spout） |
 | `failSpout` / `failInlet` | | 失败记录系统 |
 | `ctx` / `cancel` | | 取消控制 |
@@ -70,8 +66,7 @@ Farm 管理 Plot 时使用的统一接口，擦除泛型参数使 Farm 可以用
 - **`addFruitChan(fruitChan)`** — 添加一个下游果实通道
 - **`AddUpstream(name)`** — 登记上游 plot 名称，供 seal 聚合使用
 - **`ConnectTo(next PlotNode) error`** — 将果实输出连接到下游 plot 的种子输入，通过类型断言校验类型匹配
-- **`resetSeals()`** — 重置所有上游 seal 状态
-- **`markSealed(source) bool`** — 标记上游已 seal，全部完成时返回 true
+- **`markSealed(source string, sealedFrom map[string]struct{}) bool`** — 标记上游已 seal，全部完成时返回 true
 
 #### Getter 方法
 
@@ -96,8 +91,8 @@ Farm 管理 Plot 时使用的统一接口，擦除泛型参数使 Farm 可以用
 
 #### 异步 API
 
-- **`SeedAny(id, seed any) error`** — 弱类型播种，供 Farm 统一注入使用
-- **`Seed(id, seed S)`** — 播入单颗种子到 seedChan
+- **`SeedAny(seed any) error`** — 弱类型播种，供 Farm 统一注入使用
+- **`Seed(seed S)`** — 播入单颗种子到 seedChan
 - **`Seal()`** — 向 seedChan 发送 `SignalSeal`，通知 sprout 不再有新种子
 - **`Harvest(sickle func(Payload[F]), chanIndex int)`** — 异步启动果实消费协程
 - **`StartAsync()`** — 异步启动 sprout 调度器
@@ -117,8 +112,8 @@ plot := grow.NewPlot("worker", processFunc, nil, grow.WithTends(4))
 plot.InitLocalEnv()
 plot.StartSpouts()
 plot.StartAsync()
-for i, item := range items {
-    plot.Seed(i, item)
+for _, item := range items {
+    plot.Seed(item)
 }
 plot.Seal()
 plot.Harvest(func(res grow.Payload[Result]) {

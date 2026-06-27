@@ -1,5 +1,7 @@
 # grow.Farm
 
+> 最后更新日期: 2026/06/28
+
 > 源文件: `pkg/grow/farm.go`
 
 ## 概述
@@ -15,8 +17,7 @@
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `name` | `string` | farm 名称（用于日志标识） |
-| `plots` | `[]PlotNode` | 按注册顺序排列的所有 plot |
-| `plotsByName` | `map[string]PlotNode` | 按名称索引的 plot 映射 |
+| `plots` | `map[string]PlotNode` | 按名称索引的已注册 plot |
 | `edges` | `map[string]map[string]struct{}` | 有向边邻接表 |
 | `roots` | `map[string]struct{}` | root plot 集合（无上游） |
 | `heads` | `map[string]struct{}` | head plot 集合（无下游） |
@@ -33,7 +34,7 @@
 
 - **`PlotCount()`** — 返回已注册 plot 数量
 - **`HasPlot(name)`** — 判断 plot 是否已注册
-- **`GetPlot(name)`** — 按名称获取 plot
+- **`GetPlot(name)`** — 按名称获取 plot，未找到时 ok 为 false
 - **`IsRoot(name)`** — 判断是否为 root（无上游）
 - **`IsHead(name)`** — 判断是否为 head（无下游）
 - **`Connected(from, to)`** — 判断两个 plot 间是否已建立连接
@@ -74,21 +75,21 @@
 2. 启动全局 spout
 3. 绑定各 plot 的 inlet
 4. 异步启动所有 plot
-5. 向 root plot 注入种子
+5. 按 `inputs` 的键值向对应 plot 注入种子
 6. 封闭所有 root
 7. 等待所有 plot 完成
 8. 停止全局 spout
 
 ##### `validateStartInputs(inputs) error`
 
-校验输入参数：plot 必须已注册且为 root。
+校验输入参数：plot 必须已注册。
 
 ## 使用示例
 
 ```go
 // 创建 plot
 plotA := grow.NewPlot("str2int", strconv.Atoi, nil, grow.WithTends(4))
-plotB := grow.NewPlot("int2str", strconv.Itoa, nil, grow.WithTends(4))
+plotB := grow.NewPlot("double", func(i int) (int, error) { return i * 2, nil }, nil, grow.WithTends(4))
 
 // 创建 farm 并注册
 farm := grow.NewFarm("pipeline", "INFO")

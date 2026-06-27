@@ -1,5 +1,7 @@
 # grow.Fail
 
+> 最后更新日期: 2026/06/28
+
 > 源文件: `pkg/grow/fail.go`
 
 ## 概述
@@ -16,7 +18,6 @@
 |------|------|------|
 | `FormatTime` | `string` | 格式化的时间戳 |
 | `PlotName` | `string` | 产生失败的 Plot 名称 |
-| `SeedID` | `int` | 种子 ID |
 | `SeedString` | `string` | 种子的字符串表示 |
 | `ErrorMessage` | `string` | 错误信息 |
 
@@ -51,19 +52,19 @@
 
 ## 失败记录方法
 
-### `SeedWither(plotName string, seed any, err error)`
+### `SeedWither(plotName string, seedString string, err error)`
 
-记录一颗失败的种子。将 `seed` 格式化为字符串后构造 `FailRecord` 并通过 `Inlet` 异步发送。
+记录一颗失败的种子。`seedString` 为种子的字符串表示，将直接写入 `FailRecord.SeedString`；错误信息通过 `Inlet` 异步发送。
 
 ## 使用示例
 
 ```go
-ch := make(chan grow.FailRecord, 100)
-
 handler := &grow.FailRecordHandler{}
-spout := funnel.NewSpout(ch, handler)
+spout := funnel.NewSpout(handler, 100, 5*time.Second)
+spout.Start()
+defer spout.Stop()
 
-inlet := grow.NewFailInlet(ch, 5*time.Second)
+inlet := grow.NewFailInlet(spout.GetQueue(), 5*time.Second)
 
 inlet.SeedWither("file-hasher", "/path/to/file.dat", errors.New("read timeout"))
 ```
@@ -71,7 +72,7 @@ inlet.SeedWither("file-hasher", "/path/to/file.dat", errors.New("read timeout"))
 **JSONL 输出示例**:
 
 ```json
-{"FormatTime":"2024-01-15 10:30:45","PlotName":"file-hasher","SeedID":0,"SeedString":"/path/to/file.dat","ErrorMessage":"read timeout"}
+{"FormatTime":"2024-01-15 10:30:45","PlotName":"file-hasher","SeedString":"/path/to/file.dat","ErrorMessage":"read timeout"}
 ```
 
 ## 关联文件

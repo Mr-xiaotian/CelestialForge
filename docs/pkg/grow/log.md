@@ -1,5 +1,7 @@
 # grow.Log
 
+> 最后更新日期: 2026/06/28
+
 > 源文件: `pkg/grow/log.go`
 
 ## 概述
@@ -90,7 +92,7 @@
 
 记录种子成熟（培育成功），包含种子和果实的字符串表示及耗时。级别为 SUCCESS。
 
-### `SeedWither(plotName, seedRepr string, err error, startTime time.Time)`
+### `SeedWither(plotName, seedRepr string, err error, useTime float64)`
 
 记录种子枯萎（培育失败），包含错误信息和耗时。级别为 ERROR。
 
@@ -101,16 +103,16 @@
 ## 使用示例
 
 ```go
-ch := make(chan grow.LogRecord, 100)
-
 handler := &grow.LogRecordHandler{}
-spout := funnel.NewSpout(ch, handler)
+spout := funnel.NewSpout(handler, 100, 5*time.Second)
+spout.Start()
+defer spout.Stop()
 
-inlet := grow.NewLogInlet(ch, 5*time.Second, "INFO")
+inlet := grow.NewLogInlet(spout.GetQueue(), 5*time.Second, "INFO")
 
 inlet.StartPlot("file-hasher", 8)
 inlet.SeedRipen("file-hasher", "file_a.txt", "abc123...", 0.35)
-inlet.SeedWither("file-hasher", "file_b.txt", errors.New("permission denied"), time.Now())
+inlet.SeedWither("file-hasher", "file_b.txt", errors.New("permission denied"), 0.12)
 inlet.EndPlot("file-hasher", 12.5, 99, 1)
 ```
 

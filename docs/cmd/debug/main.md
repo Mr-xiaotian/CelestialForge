@@ -1,5 +1,6 @@
 # cmd/debug.main
 
+> 最后更新日期: 2026/06/28
 > 源文件: `cmd/debug/main.go`
 
 ## 概述
@@ -14,7 +15,7 @@
 
 ### `debug_duplicate()`
 
-调用 `file.ScanDuplicateFile` 扫描当前目录下的重复文件并输出结果。
+调用 `file.ScanDuplicateFile` 扫描当前目录下的重复文件，再通过 `file.DuplicateReport` 生成并输出格式化报告。
 
 ### `debug_bytes()`
 
@@ -48,5 +49,10 @@ go run cmd/debug/main.go
 
 ## 关联文件
 
-- [../../tests/file_test.md](../../tests/file_test.md) — file 包的正式测试用例
+- [../../pkg/file/info.md](../../pkg/file/info.md) — `GetFilesInfoRecursive` 递归获取文件信息
+- [../../pkg/file/duplicate.md](../../pkg/file/duplicate.md) — `ScanDuplicateFile` 与 `DuplicateReport` 重复文件扫描与报告
+- [../../pkg/file/size.md](../../pkg/file/size.md) — `GetDirSize` 目录大小计算
+- [../../pkg/file/mtime.md](../../pkg/file/mtime.md) — `GetDirMtime` 目录修改时间
+- [../../pkg/file/hash.md](../../pkg/file/hash.md) — `GetFileMD5` 与 `GetFileSnapshotMD5` 文件哈希
+- [../../pkg/units/bytes.md](../../pkg/units/bytes.md) — `HumanBytes` 字节单位
 - [../duplicate/main.md](../duplicate/main.md) — 重复文件扫描的正式 CLI 工具
