@@ -401,7 +401,6 @@ func (p *Plot[S, F]) Seal() {
 // chanIndex 指定从哪个 fruitChan 读取（standalone 模式固定为 0）。
 // 阻塞直到收到 SignalSeal。
 func (p *Plot[S, F]) Harvest(sickle func(Payload[F]), chanIndex int) {
-
 	p.wg.Go(func() {
 		for res := range p.fruitChans[chanIndex] {
 			if res.Signal == SignalSeal {
@@ -419,7 +418,6 @@ func (p *Plot[S, F]) Harvest(sickle func(Payload[F]), chanIndex int) {
 // 外部通过 Seed 播种、Seal 终止、Harvest 收获。
 // 完成后需调用 WaitAsync 等待所有协程退出。
 func (p *Plot[S, F]) StartAsync() {
-
 	p.wg.Go(func() {
 		p.logInlet.StartPlot(p.name, p.numTends)
 		startTime := time.Now()

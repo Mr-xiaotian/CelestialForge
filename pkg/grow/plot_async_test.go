@@ -11,25 +11,26 @@ func TestPlot_Async(t *testing.T) {
 		return seed * 2, nil
 	}
 
-	plot := grow.NewPlot("test_async", cultivator, nil, grow.WithTends(3))
+	plot := grow.NewPlot("test_async", cultivator, nil, grow.WithTends(3), grow.WithLogLevel("INFO"))
 	plot.InitLocalEnv()
 	plot.StartSpouts()
 	fruits := map[int]int{}
 
 	plot.StartAsync()
-	for seed := range 5 {
-		plot.Seed(seed)
-	}
-	plot.Seal()
+	// 优先启动Harvest, 避免seed数量过大导致seed与fruit chan全部阻塞
 	plot.Harvest(func(res grow.Payload[int]) {
 		fruits[res.Prev.(int)] = res.Value
 	}, 0)
+	for seed := range 50 {
+		plot.Seed(seed)
+	}
+	plot.Seal()
 	plot.WaitAsync()
 
 	plot.StopSpouts()
 
-	if len(fruits) != 5 {
-		t.Errorf("expected 5 fruits, got %d", len(fruits))
+	if len(fruits) != 50 {
+		t.Errorf("expected 50 fruits, got %d", len(fruits))
 	}
 	if int(plot.GetState()) != 2 {
 		t.Errorf("expected state 2 (done), got %d", plot.GetState())
