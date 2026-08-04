@@ -33,7 +33,8 @@ func getSizeDuplicate(fileInfoMap FileInfoMap) []string {
 // getSnapshotDuplicate 用文件前 4KB 的快照哈希进一步过滤重复候选。
 func getSnapshotDuplicate(fileSizeDuplicates []string, numTends int) ([]string, error) {
 	// 并行计算文件hash
-	plot := grow.NewPlot("SnapshotPlot", GetFileSnapshotSHA1, []grow.Observer{grow.NewProgressBar("Snapshoting files")}, grow.WithTends(numTends))
+	plot := grow.NewPlot("SnapshotPlot", GetFileSnapshotSHA1, grow.WithTends(numTends))
+	plot.AddObserver(grow.NewProgressBar("Snapshoting files"))
 	karmas := plot.Start(fileSizeDuplicates)
 
 	// 收集结果
@@ -56,7 +57,8 @@ func getSnapshotDuplicate(fileSizeDuplicates []string, numTends int) ([]string, 
 // getHashDuplicate 用完整文件哈希确认最终重复文件。
 func getHashDuplicate(fileSnapshotDuplicates []string, fileInfoMap FileInfoMap, numTends int) (map[FileInfo][]string, error) {
 	// 并行计算文件hash
-	plot := grow.NewPlot("HashPlot", GetFileSHA1, []grow.Observer{grow.NewProgressBar("Hashing files")}, grow.WithTends(numTends))
+	plot := grow.NewPlot("HashPlot", GetFileSHA1, grow.WithTends(numTends))
+	plot.AddObserver(grow.NewProgressBar("Hashing files"))
 	karmas := plot.Start(fileSnapshotDuplicates)
 
 	// 收集结果

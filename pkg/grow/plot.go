@@ -62,8 +62,8 @@ type Plot[S any, F any] struct {
 
 // NewPlot 创建一个 Plot 实例。
 // name 为 plot 名称（在 Farm 中需唯一），cultivator 为培育函数，
-// observers 为进度观察者列表，opts 为可选配置项。
-func NewPlot[S any, F any](name string, cultivator func(S) (F, error), observers []Observer, opts ...Option) *Plot[S, F] {
+// opts 为可选配置项。
+func NewPlot[S any, F any](name string, cultivator func(S) (F, error), opts ...Option) *Plot[S, F] {
 	o := defaultOptions()
 	for _, opt := range opts {
 		opt(&o)
@@ -74,7 +74,6 @@ func NewPlot[S any, F any](name string, cultivator func(S) (F, error), observers
 	return &Plot[S, F]{
 		name:        name,
 		cultivator:  cultivator,
-		observers:   observers,
 		plotOptions: o,
 
 		seedChan:   make(chan Payload[S], o.chanSize),
@@ -84,6 +83,11 @@ func NewPlot[S any, F any](name string, cultivator func(S) (F, error), observers
 		ctx:    ctx,
 		cancel: cancel,
 	}
+}
+
+// AddObserver 添加一个进度观察者。
+func (p *Plot[S, F]) AddObserver(observer Observer) {
+	p.observers = append(p.observers, observer)
 }
 
 // ==== Initialization ====

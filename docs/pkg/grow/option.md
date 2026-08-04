@@ -54,7 +54,7 @@
 ## 使用示例
 
 ```go
-plot := grow.NewPlot("api-caller", callAPI, nil,
+plot := grow.NewPlot("api-caller", callAPI,
     grow.WithTends(4),
     grow.WithChanSize(16),
     grow.WithMaxRetries(3),

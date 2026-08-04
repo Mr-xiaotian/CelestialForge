@@ -13,7 +13,7 @@ func TestPlot_AllError(t *testing.T) {
 		return "", errors.New("always fail")
 	}
 
-	plot := grow.NewPlot("test_all_error", cultivator, nil, grow.WithTends(2))
+	plot := grow.NewPlot("test_all_error", cultivator, grow.WithTends(2))
 	seeds := []int{1, 2, 3, 4, 5}
 
 	karmas := plot.Start(seeds)
@@ -38,7 +38,7 @@ func TestPlot_PartialError(t *testing.T) {
 		return seed * 10, nil
 	}
 
-	plot := grow.NewPlot("test_partial_error", cultivator, nil, grow.WithTends(2))
+	plot := grow.NewPlot("test_partial_error", cultivator, grow.WithTends(2))
 	seeds := []int{1, 2, 3, 4, 5}
 
 	karmas := plot.Start(seeds)
@@ -64,7 +64,7 @@ func TestPlot_AllSuccess(t *testing.T) {
 		return seed * 2, nil
 	}
 
-	plot := grow.NewPlot("test_all_success", cultivator, nil, grow.WithTends(3))
+	plot := grow.NewPlot("test_all_success", cultivator, grow.WithTends(3))
 	seeds := []int{1, 2, 3, 4, 5}
 
 	collects := plot.Start(seeds)

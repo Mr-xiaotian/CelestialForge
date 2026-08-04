@@ -14,15 +14,15 @@ func TestFarmStructure121(t *testing.T) {
 
 	root := grow.NewPlot("root", func(seed int) (int, error) {
 		return seed, nil
-	}, nil, grow.WithTends(8))
+	}, grow.WithTends(8))
 
 	midA := grow.NewPlot("midA", func(seed int) (int, error) {
 		return seed*10 + 1, nil
-	}, nil, grow.WithTends(8))
+	}, grow.WithTends(8))
 
 	midB := grow.NewPlot("midB", func(seed int) (int, error) {
 		return seed*10 + 2, nil
-	}, nil, grow.WithTends(8))
+	}, grow.WithTends(8))
 
 	var (
 		mu     sync.Mutex
@@ -34,7 +34,7 @@ func TestFarmStructure121(t *testing.T) {
 		counts[seed]++
 		mu.Unlock()
 		return seed, nil
-	}, nil, grow.WithTends(8))
+	}, grow.WithTends(8))
 
 	farm := grow.NewFarm("structure_121", "INFO")
 	if err := farm.AddPlot(root, midA, midB, head); err != nil {
@@ -111,12 +111,12 @@ func TestFarmStructure121PartialFailure(t *testing.T) {
 			return 0, fmt.Errorf("even seed %d", seed)
 		}
 		return seed, nil
-	}, nil, grow.WithTends(4))
+	}, grow.WithTends(4))
 
 	// midA: 全部成功
 	midA := grow.NewPlot("midA", func(seed int) (int, error) {
 		return seed*10 + 1, nil
-	}, nil, grow.WithTends(4))
+	}, grow.WithTends(4))
 
 	// midB: 能被 3 整除的失败，10 个输入中失败 seed=3,9 共 5 个（seed=1,3,5,7,9,11,13,15,17,19 中 3,9,15 能被3整除）
 	// 修正：输入是 1,3,5,7,9,11,13,15,17,19（10个奇数），其中能被3整除的是 3,9,15 共 3 个，成功 7 个
@@ -126,11 +126,11 @@ func TestFarmStructure121PartialFailure(t *testing.T) {
 			return 0, fmt.Errorf("seed %d too large", seed)
 		}
 		return seed*10 + 2, nil
-	}, nil, grow.WithTends(4))
+	}, grow.WithTends(4))
 
 	head := grow.NewPlot("head", func(seed int) (int, error) {
 		return seed, nil
-	}, nil, grow.WithTends(4))
+	}, grow.WithTends(4))
 
 	farm := grow.NewFarm("structure_121_partial_failure", "INFO")
 	if err := farm.AddPlot(root, midA, midB, head); err != nil {
@@ -190,7 +190,7 @@ func TestFarmStructureDisconnectedComponents(t *testing.T) {
 	// 第一组: 1→2 (rootA → midA1, midA2)
 	rootA := grow.NewPlot("rootA", func(seed int) (int, error) {
 		return seed*10 + 1, nil
-	}, nil, grow.WithTends(4))
+	}, grow.WithTends(4))
 
 	var (
 		muA      sync.Mutex
@@ -201,21 +201,21 @@ func TestFarmStructureDisconnectedComponents(t *testing.T) {
 		resultsA[seed]++
 		muA.Unlock()
 		return seed, nil
-	}, nil, grow.WithTends(4))
+	}, grow.WithTends(4))
 	midA2 := grow.NewPlot("midA2", func(seed int) (int, error) {
 		muA.Lock()
 		resultsA[seed]++
 		muA.Unlock()
 		return seed, nil
-	}, nil, grow.WithTends(4))
+	}, grow.WithTends(4))
 
 	// 第二组: 2→1 (rootB1, rootB2 → headB)
 	rootB1 := grow.NewPlot("rootB1", func(seed int) (int, error) {
 		return seed*10 + 3, nil
-	}, nil, grow.WithTends(4))
+	}, grow.WithTends(4))
 	rootB2 := grow.NewPlot("rootB2", func(seed int) (int, error) {
 		return seed*10 + 4, nil
-	}, nil, grow.WithTends(4))
+	}, grow.WithTends(4))
 
 	var (
 		muB      sync.Mutex
@@ -226,7 +226,7 @@ func TestFarmStructureDisconnectedComponents(t *testing.T) {
 		resultsB[seed]++
 		muB.Unlock()
 		return seed, nil
-	}, nil, grow.WithTends(4))
+	}, grow.WithTends(4))
 
 	farm := grow.NewFarm("disconnected_components", "INFO")
 	if err := farm.AddPlot(rootA, midA1, midA2, rootB1, rootB2, headB); err != nil {
@@ -296,12 +296,12 @@ func TestFarmStructure21FaninDifferentSpeed(t *testing.T) {
 
 	rootFast := grow.NewPlot("rootFast", func(seed int) (int, error) {
 		return seed*10 + 1, nil
-	}, nil, grow.WithTends(4), grow.WithChanSize(50), grow.WithLogLevel("SUCCESS"))
+	}, grow.WithTends(4), grow.WithChanSize(50), grow.WithLogLevel("SUCCESS"))
 
 	rootSlow := grow.NewPlot("rootSlow", func(seed int) (int, error) {
 		time.Sleep(10 * time.Millisecond)
 		return seed*10 + 2, nil
-	}, nil, grow.WithTends(4), grow.WithChanSize(50), grow.WithLogLevel("SUCCESS"))
+	}, grow.WithTends(4), grow.WithChanSize(50), grow.WithLogLevel("SUCCESS"))
 
 	var (
 		mu      sync.Mutex
@@ -315,7 +315,7 @@ func TestFarmStructure21FaninDifferentSpeed(t *testing.T) {
 		visited++
 		mu.Unlock()
 		return seed, nil
-	}, nil, grow.WithTends(8), grow.WithChanSize(100), grow.WithLogLevel("SUCCESS"))
+	}, grow.WithTends(8), grow.WithChanSize(100), grow.WithLogLevel("SUCCESS"))
 
 	farm := grow.NewFarm("structure_21_fanin_different_speed", "INFO")
 	if err := farm.AddPlot(rootFast, rootSlow, head); err != nil {

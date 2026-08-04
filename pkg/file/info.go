@@ -21,13 +21,14 @@ func GetFilesInfoRecursive(root string) (FileInfoMap, error) {
 		if err != nil {
 			return err // 跳过无法访问的文件
 		}
-		if !d.IsDir() {
-			info, _ := d.Info()
-			files[path] = FileInfo{
-				Size:  units.NewHumanBytes(info.Size()),
-				Mtime: info.ModTime(),
-			} // 完整路径
+		if d.IsDir() {
+			return nil // 跳过目录
 		}
+		info, _ := d.Info()
+		files[path] = FileInfo{
+			Size:  units.NewHumanBytes(info.Size()),
+			Mtime: info.ModTime(),
+		} // 完整路径作为键，包含大小和修改时间
 		return nil
 	})
 

@@ -53,9 +53,10 @@
 ```go
 // 使用内置进度条
 bar := grow.NewProgressBar("Processing files")
-plot := grow.NewPlot("hasher", hashFunc, []grow.Observer{bar},
+plot := grow.NewPlot("hasher", hashFunc,
     grow.WithTends(8),
 )
+plot.AddObserver(bar)
 plot.Start(files)
 ```
 
