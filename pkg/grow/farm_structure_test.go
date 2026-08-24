@@ -59,19 +59,6 @@ func TestFarmStructure121(t *testing.T) {
 		t.Fatalf("Start() error = %v", err)
 	}
 
-	if !farm.IsRoot("root") {
-		t.Fatal("root should remain root")
-	}
-	if !farm.IsHead("head") {
-		t.Fatal("head should remain head")
-	}
-	if farm.IsHead("root") {
-		t.Fatal("root should not be head after connecting downstream")
-	}
-	if farm.IsRoot("head") {
-		t.Fatal("head should not be root after receiving upstream")
-	}
-
 	if got := len(counts); got != seedCount*2 {
 		t.Fatalf("len(counts) = %d, want %d", got, seedCount*2)
 	}
@@ -337,19 +324,6 @@ func TestFarmStructure21FaninDifferentSpeed(t *testing.T) {
 		"rootSlow": slowInputs,
 	}); err != nil {
 		t.Fatalf("Start() error = %v", err)
-	}
-
-	if !farm.IsRoot("rootFast") || !farm.IsRoot("rootSlow") {
-		t.Fatal("both roots should remain root")
-	}
-	if farm.IsHead("rootFast") || farm.IsHead("rootSlow") {
-		t.Fatal("roots should not remain head after connecting downstream")
-	}
-	if farm.IsRoot("head") {
-		t.Fatal("head should not be root after receiving from two upstreams")
-	}
-	if !farm.IsHead("head") {
-		t.Fatal("head should remain head")
 	}
 
 	if visited != seedCount*2 {

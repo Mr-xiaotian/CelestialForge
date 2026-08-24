@@ -30,11 +30,8 @@ func TestFarmAddPlot(t *testing.T) {
 	if got, ok := farm.GetPlot("B"); !ok || got != plotB {
 		t.Fatalf("GetPlot(B) = %v, %v, want plotB, true", got, ok)
 	}
-	if !farm.IsRoot("A") || !farm.IsHead("A") {
-		t.Fatalf("plot A should be both root and head after AddPlot")
-	}
-	if !farm.IsRoot("B") || !farm.IsHead("B") {
-		t.Fatalf("plot B should be both root and head after AddPlot")
+	if farm.Connected("A", "B") {
+		t.Fatalf("plots should not be connected after AddPlot only")
 	}
 }
 
@@ -73,18 +70,6 @@ func TestFarmConnectHyperEdge(t *testing.T) {
 	}
 	if farm.Connected("targetA", "source") {
 		t.Fatal("targetA should not connect back to source")
-	}
-	if !farm.IsRoot("source") {
-		t.Fatal("source should remain root after only providing outputs")
-	}
-	if farm.IsHead("source") {
-		t.Fatal("source should no longer be head after connecting to downstream")
-	}
-	if farm.IsRoot("targetA") || farm.IsRoot("targetB") {
-		t.Fatal("targets should no longer be root after receiving upstream")
-	}
-	if !farm.IsHead("targetA") || !farm.IsHead("targetB") {
-		t.Fatal("targets should remain head without downstream")
 	}
 }
 

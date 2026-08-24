@@ -13,11 +13,11 @@ import (
 // 负责节点注册、名称唯一性校验、超边式连接建立，
 // 以及统一的 spout 管理和生命周期调度。
 type Farm struct {
-	name  string
-	plots map[string]PlotNode
-	edges map[string]map[string]struct{}
-	roots map[string]struct{}
-	heads map[string]struct{}
+	name        string
+	plots       map[string]PlotNode
+	edges       map[string]map[string]struct{}
+	sourceNodes []string
+	orderGraph  *OrderGraph
 
 	logSpout  *funnel.Spout[LogRecord]
 	failSpout *funnel.Spout[FailRecord]
@@ -34,13 +34,13 @@ func NewFarm(name string, logLevel string) *Farm {
 	failSpout := funnel.NewSpout(&FailRecordHandler{}, 100, time.Second)
 	logInlet := NewLogInlet(logSpout.GetQueue(), time.Second, logLevel)
 	failInlet := NewFailInlet(failSpout.GetQueue(), time.Second)
+	orderGraph := NewOrderGraph()
 
 	return &Farm{
-		name:  name,
-		plots: make(map[string]PlotNode),
-		edges: make(map[string]map[string]struct{}),
-		roots: make(map[string]struct{}),
-		heads: make(map[string]struct{}),
+		name:       name,
+		plots:      make(map[string]PlotNode),
+		edges:      make(map[string]map[string]struct{}),
+		orderGraph: orderGraph,
 
 		logSpout:  logSpout,
 		failSpout: failSpout,
@@ -68,18 +68,6 @@ func (f *Farm) GetPlot(name string) (PlotNode, bool) {
 	return plot, ok
 }
 
-// IsRoot 判断指定 plot 是否为 root（无上游）。
-func (f *Farm) IsRoot(name string) bool {
-	_, ok := f.roots[name]
-	return ok
-}
-
-// IsHead 判断指定 plot 是否为 head（无下游）。
-func (f *Farm) IsHead(name string) bool {
-	_, ok := f.heads[name]
-	return ok
-}
-
 // Connected 返回 from → to 是否已建立连接。
 func (f *Farm) Connected(from, to string) bool {
 	targets, ok := f.edges[from]
@@ -88,28 +76,6 @@ func (f *Farm) Connected(from, to string) bool {
 	}
 	_, ok = targets[to]
 	return ok
-}
-
-// rootPlots 返回所有 root plot（无上游的入口节点）。
-func (f *Farm) rootPlots() []PlotNode {
-	roots := make([]PlotNode, 0, len(f.roots))
-	for name := range f.roots {
-		if plot, ok := f.plots[name]; ok {
-			roots = append(roots, plot)
-		}
-	}
-	return roots
-}
-
-// headPlots 返回所有 head plot（无下游的末端节点）。
-func (f *Farm) headPlots() []PlotNode {
-	heads := make([]PlotNode, 0, len(f.heads))
-	for name := range f.heads {
-		if plot, ok := f.plots[name]; ok {
-			heads = append(heads, plot)
-		}
-	}
-	return heads
 }
 
 // ==== Registration ====
@@ -131,8 +97,7 @@ func (f *Farm) AddPlot(plots ...PlotNode) error {
 		}
 
 		f.plots[name] = plot
-		f.roots[name] = struct{}{}
-		f.heads[name] = struct{}{}
+		f.orderGraph.AddNode(name)
 	}
 
 	return nil
@@ -175,8 +140,7 @@ func (f *Farm) addEdge(from, to string) {
 		f.edges[from] = make(map[string]struct{})
 	}
 	f.edges[from][to] = struct{}{}
-	delete(f.heads, from)
-	delete(f.roots, to)
+	f.orderGraph.AddEdge(from, to)
 }
 
 // Connect 在源组和目标组之间建立全连接（笛卡尔积）。
@@ -231,13 +195,15 @@ func (f *Farm) validateStartInputs(inputs map[string][]any) error {
 }
 
 // Start 同步启动整张 farm 图。
-// inputs 按 plot 名称声明初始种子，仅允许注入 root plot。
+// inputs 按 plot 名称声明初始种子，仅允许注入 source plot。
 // 流程：启动全局 spout → 绑定各 plot inlet → 启动所有 plot →
-// 注入种子 → 封闭所有 root → 等待所有 plot 完成 → 停止 spout。
+// 注入种子 → 封闭所有 source → 等待所有 plot 完成 → 停止 spout。
 func (f *Farm) Start(inputs map[string][]any) error {
 	if err := f.validateStartInputs(inputs); err != nil {
 		return err
 	}
+
+	f.sourceNodes = SourceNodes(f.orderGraph)
 
 	f.logSpout.Start()
 	f.failSpout.Start()
@@ -264,8 +230,8 @@ func (f *Farm) Start(inputs map[string][]any) error {
 		}
 	}
 
-	for _, plot := range f.rootPlots() {
-		plot.Seal()
+	for _, name := range f.sourceNodes {
+		f.plots[name].Seal()
 	}
 
 	for _, plot := range f.plots {
