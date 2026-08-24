@@ -43,7 +43,7 @@ type Plot[S any, F any] struct {
 	plotOptions
 
 	seedChan   chan Payload[S]
-	fruitChans []chan Payload[F]
+	fruitChans map[string]chan Payload[F]
 	upstreams  map[string]struct{}
 
 	logSpout  *funnel.Spout[LogRecord]
@@ -77,7 +77,7 @@ func NewPlot[S any, F any](name string, cultivator func(S) (F, error), opts ...O
 		plotOptions: o,
 
 		seedChan:   make(chan Payload[S], o.chanSize),
-		fruitChans: []chan Payload[F]{},
+		fruitChans: make(map[string]chan Payload[F]),
 		upstreams:  make(map[string]struct{}),
 
 		ctx:    ctx,
@@ -96,12 +96,9 @@ func (p *Plot[S, F]) AddObserver(observer Observer) {
 // 创建本地 fruitChan、日志/失败 spout 并绑定 inlet。
 // Farm 模式下不需要调用此方法，由 Farm 统一管理 spout 和 inlet。
 func (p *Plot[S, F]) InitLocalEnv() {
-	fruitChan := make(chan Payload[F], p.chanSize)
-
 	p.logSpout = funnel.NewSpout(&LogRecordHandler{}, 100, time.Second)
 	p.failSpout = funnel.NewSpout(&FailRecordHandler{}, 100, time.Second)
 
-	p.addFruitChan(fruitChan)
 	p.BindInlet(p.logSpout.GetQueue(), p.failSpout.GetQueue())
 }
 
@@ -126,13 +123,9 @@ func (p *Plot[S, F]) StopSpouts() {
 
 // ==== Connection ====
 
-// addFruitChan 添加一个下游果实通道。
-func (p *Plot[S, F]) addFruitChan(fruitChan chan Payload[F]) {
-	p.fruitChans = append(p.fruitChans, fruitChan)
-}
-
 // AddUpstream 登记一个上游 plot 名称。
-// sprout 在收到 SignalSeal 时，需要所有已登记的上游都发送过 seal 信号后才算 inputClosed。
+// 当未收到外部 input seal 时，sprout 需要等所有已登记上游都发送过
+// seal 信号后，才会将输入视为关闭。
 func (p *Plot[S, F]) AddUpstream(name string) {
 	if name == "" {
 		return
@@ -148,13 +141,13 @@ func (p *Plot[S, F]) ConnectTo(next PlotNode) error {
 		return fmt.Errorf("plot %q fruit type is incompatible with plot %q seed type", p.name, next.GetName())
 	}
 
-	p.addFruitChan(seedChan)
+	p.fruitChans[next.GetName()] = seedChan
 	return nil
 }
 
-// markSealed 标记一个上游 plot 为已 seal。
-// 当所有已登记上游都已 seal 时返回 true。
-// 无上游（root plot）时总是返回 true。
+// markSealed 处理一条 seal 信号并判断输入是否关闭。
+// sourceInput 表示外部调用者显式终止该 plot 的输入，此时直接关闭；
+// 否则需要等待所有已登记上游都发送过 seal 信号。
 func (p *Plot[S, F]) markSealed(source string, sealedFrom map[string]struct{}) bool {
 	if source == sourceInput {
 		return true
@@ -248,15 +241,6 @@ func (p *Plot[S, F]) bearWeed(seedPayload Payload[S], err error, startTime time.
 
 // ==== Internal Pipeline ====
 
-// seed 将种子切片逐个包装为 Payload 发送到 seedChan，完成后发送 SignalSeal。
-func (p *Plot[S, F]) seed(seeds []S) {
-	p.AddSeedNum(len(seeds))
-	for _, seed := range seeds {
-		p.seedChan <- Payload[S]{Value: seed, Source: sourceInput}
-	}
-	p.seedChan <- Payload[S]{Signal: SignalSeal, Source: sourceInput}
-}
-
 // tend 照料单颗种子：执行 cultivator 并在失败时按策略重试。
 // 完成后通过 bearFruit 或 bearWeed 路由结果。
 func (p *Plot[S, F]) tend(seedPayload Payload[S], sem chan struct{}, done chan struct{}) {
@@ -296,8 +280,9 @@ func (p *Plot[S, F]) tend(seedPayload Payload[S], sem chan struct{}, done chan s
 }
 
 // sprout 调度器：从 seedChan 读取种子，分发给 tend 协程并行处理。
-// 通过信号量控制最大并发数，通过 SignalSeal 判断输入是否结束。
-// 所有种子处理完毕后，向所有 fruitChans 发送 SignalSeal 通知下游。
+// 通过信号量控制最大并发数，并根据 seal 信号判断输入是否结束。
+// 外部 input seal 具有强终止语义：一旦收到，即不再等待剩余上游 seal。
+// 所有已接收种子处理完毕后，向所有 fruitChans 发送 SignalSeal 通知下游。
 func (p *Plot[S, F]) sprout() {
 	sem := make(chan struct{}, p.numTends)
 	done := make(chan struct{}, p.numTends)
@@ -325,9 +310,8 @@ func (p *Plot[S, F]) sprout() {
 				inputClosed = p.markSealed(seed.Source, sealedFrom)
 				continue
 			}
-			if seed.Source != sourceInput {
-				p.AddSeedNum(1)
-			}
+			p.AddSeedNum(1)
+
 			sem <- struct{}{}
 			inFlight++
 			go p.tend(seed, sem, done)
@@ -337,44 +321,6 @@ func (p *Plot[S, F]) sprout() {
 			ctxCancel = true
 		}
 	}
-}
-
-// harvest 从 fruitChans[0] 收集所有果实，直到收到 SignalSeal。
-// 仅供 standalone 同步模式（Start）使用。
-func (p *Plot[S, F]) harvest() []Karma[S, F] {
-	fruits := make([]Karma[S, F], 0)
-	for res := range p.fruitChans[0] {
-		if res.Signal == SignalSeal {
-			break
-		}
-		fruits = append(fruits, Karma[S, F]{
-			Seed:  res.Prev.(S),
-			Fruit: res.Value,
-		})
-	}
-	return fruits
-}
-
-// ==== Sync API ====
-
-// Start 同步启动 Plot，阻塞直到所有种子培育完成。
-// 自动初始化本地环境、启停 spout，返回所有 Karma（种子-果实配对）。
-func (p *Plot[S, F]) Start(seeds []S) []Karma[S, F] {
-	p.InitLocalEnv()
-
-	p.StartSpouts()
-	p.logInlet.StartPlot(p.name, p.numTends)
-	startTime := time.Now()
-
-	p.notifyStart()
-	go p.seed(seeds)
-	go p.sprout()
-	karmas := p.harvest()
-	p.notifyFinish()
-
-	p.logInlet.EndPlot(p.name, time.Since(startTime).Seconds(), p.GetFruitNum(), p.GetWeedNum())
-	p.StopSpouts()
-	return karmas
 }
 
 // ==== Async API ====
@@ -391,36 +337,21 @@ func (p *Plot[S, F]) SeedAny(seed any) error {
 }
 
 // Seed 播入单颗种子到 seedChan。
+// 该输入视为外部调用者注入，而非来自某个上游 plot。
 func (p *Plot[S, F]) Seed(seed S) {
-	p.AddSeedNum(1)
-	p.seedChan <- Payload[S]{Value: seed, Source: sourceInput}
+	p.seedChan <- Payload[S]{Value: seed}
 }
 
-// Seal 向 seedChan 发送 SignalSeal，通知 sprout 不再有新种子。
+// Seal 向 seedChan 发送来自外部 input 的 SignalSeal。
+// 这表示外部调用者要求终止该 plot 的后续输入处理；对于已连接上游的
+// plot，这同样会触发强终止，而不是继续等待剩余上游 seal。
 func (p *Plot[S, F]) Seal() {
 	p.seedChan <- Payload[S]{Signal: SignalSeal, Source: sourceInput}
 }
 
-// Harvest 异步启动果实消费协程，逐个调用 sickle 处理果实。
-// chanIndex 指定从哪个 fruitChan 读取（standalone 模式固定为 0）。
-// 阻塞直到收到 SignalSeal。
-func (p *Plot[S, F]) Harvest(sickle func(Payload[F]), chanIndex int) {
-	p.wg.Go(func() {
-		for res := range p.fruitChans[chanIndex] {
-			if res.Signal == SignalSeal {
-				break
-			}
-			if sickle != nil {
-				sickle(res)
-			}
-		}
-	})
-}
-
 // StartAsync 异步启动 sprout 调度器。
 // 调用前需先完成 BindInlet 绑定通道。
-// 外部通过 Seed 播种、Seal 终止、Harvest 收获。
-// 完成后需调用 WaitAsync 等待所有协程退出。
+// 外部通过 Seed 播种、Seal 终止；完成后需调用 WaitAsync 等待退出。
 func (p *Plot[S, F]) StartAsync() {
 	p.wg.Go(func() {
 		p.logInlet.StartPlot(p.name, p.numTends)
