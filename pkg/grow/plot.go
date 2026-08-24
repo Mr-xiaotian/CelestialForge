@@ -156,7 +156,7 @@ func (p *Plot[S, F]) ConnectTo(next PlotNode) error {
 // 当所有已登记上游都已 seal 时返回 true。
 // 无上游（root plot）时总是返回 true。
 func (p *Plot[S, F]) markSealed(source string, sealedFrom map[string]struct{}) bool {
-	if len(p.upstreams) == 0 {
+	if source == sourceInput {
 		return true
 	}
 	if source == "" {
@@ -252,9 +252,9 @@ func (p *Plot[S, F]) bearWeed(seedPayload Payload[S], err error, startTime time.
 func (p *Plot[S, F]) seed(seeds []S) {
 	p.AddSeedNum(len(seeds))
 	for _, seed := range seeds {
-		p.seedChan <- Payload[S]{Value: seed, Source: p.name}
+		p.seedChan <- Payload[S]{Value: seed, Source: sourceInput}
 	}
-	p.seedChan <- Payload[S]{Signal: SignalSeal, Source: p.name}
+	p.seedChan <- Payload[S]{Signal: SignalSeal, Source: sourceInput}
 }
 
 // tend 照料单颗种子：执行 cultivator 并在失败时按策略重试。
@@ -325,7 +325,7 @@ func (p *Plot[S, F]) sprout() {
 				inputClosed = p.markSealed(seed.Source, sealedFrom)
 				continue
 			}
-			if seed.Source != p.name {
+			if seed.Source != sourceInput {
 				p.AddSeedNum(1)
 			}
 			sem <- struct{}{}
@@ -393,12 +393,12 @@ func (p *Plot[S, F]) SeedAny(seed any) error {
 // Seed 播入单颗种子到 seedChan。
 func (p *Plot[S, F]) Seed(seed S) {
 	p.AddSeedNum(1)
-	p.seedChan <- Payload[S]{Value: seed, Source: p.name}
+	p.seedChan <- Payload[S]{Value: seed, Source: sourceInput}
 }
 
 // Seal 向 seedChan 发送 SignalSeal，通知 sprout 不再有新种子。
 func (p *Plot[S, F]) Seal() {
-	p.seedChan <- Payload[S]{Signal: SignalSeal, Source: p.name}
+	p.seedChan <- Payload[S]{Signal: SignalSeal, Source: sourceInput}
 }
 
 // Harvest 异步启动果实消费协程，逐个调用 sickle 处理果实。
