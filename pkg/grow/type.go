@@ -14,7 +14,8 @@ const (
 // Signal 为 SignalNone 时为正常数据，为 SignalSeal 时为终止信号。
 type Payload[V any] struct {
 	// Signal与Seed通用
-	Signal int
+	Signal  int
+	EventID int
 
 	// Signal使用
 	Source string

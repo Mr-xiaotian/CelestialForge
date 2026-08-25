@@ -136,16 +136,16 @@ func (l *LogInlet) EndPlot(plotName string, useTime float64, fruitNum, weedNum i
 }
 
 // SeedRipen 记录种子成熟（培育成功），包含种子和果实的字符串表示及耗时。
-func (l *LogInlet) SeedRipen(plotName string, seedRepr string, fruitRepr string, useTime float64) {
-	l.log("SUCCESS", fmt.Sprintf("In '%s', Seed %s ripened. Fruit is %s. Use %.2fs.", plotName, seedRepr, fruitRepr, useTime))
+func (l *LogInlet) SeedRipen(plotName string, seedRepr string, fruitRepr string, useTime float64, seedID int, fruitID int) {
+	l.log("SUCCESS", fmt.Sprintf("In '%s', Seed %s ripened. Fruit is %s. Use %.2fs. [%d->%d*]", plotName, seedRepr, fruitRepr, useTime, seedID, fruitID))
 }
 
 // SeedWither 记录种子枯萎（培育失败），包含错误信息和耗时。
-func (l *LogInlet) SeedWither(plotName string, seedRepr string, err error, useTime float64) {
-	l.log("ERROR", fmt.Sprintf("In '%s', Seed %s withered: %v. Use %.2fs.", plotName, seedRepr, err, useTime))
+func (l *LogInlet) SeedWither(plotName string, seedRepr string, err error, useTime float64, seedID int, weedID int) {
+	l.log("ERROR", fmt.Sprintf("In '%s', Seed %s withered: %v. Use %.2fs. [%d->%d*]", plotName, seedRepr, err, useTime, seedID, weedID))
 }
 
 // SeedReplant 记录种子重新种植（重试），包含当前尝试次数和错误信息。
-func (l *LogInlet) SeedReplant(plotName string, seedRepr string, attempt int, err error) {
-	l.log("WARNING", fmt.Sprintf("In '%s', Seed %s attempt %d withered: %v. Replanting...", plotName, seedRepr, attempt, err))
+func (l *LogInlet) SeedReplant(plotName string, seedRepr string, attempt int, err error, seedID int, replantID int) {
+	l.log("WARNING", fmt.Sprintf("In '%s', Seed %s attempt %d withered: %v. Replanting... [%d->%d*]", plotName, seedRepr, attempt, err, seedID, replantID))
 }

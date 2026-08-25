@@ -19,6 +19,8 @@ type Farm struct {
 	sourceNodes []string
 	orderGraph  *OrderGraph
 
+	eventClient EventClient
+
 	logSpout  *funnel.Spout[LogRecord]
 	failSpout *funnel.Spout[FailRecord]
 	logInlet  *LogInlet
@@ -41,6 +43,8 @@ func NewFarm(name string, logLevel string) *Farm {
 		plots:      make(map[string]PlotNode),
 		edges:      make(map[string]map[string]struct{}),
 		orderGraph: orderGraph,
+
+		eventClient: NewLocalEventClient(),
 
 		logSpout:  logSpout,
 		failSpout: failSpout,
@@ -98,6 +102,7 @@ func (f *Farm) AddPlot(plots ...PlotNode) error {
 
 		f.plots[name] = plot
 		f.orderGraph.AddNode(name)
+		plot.SetEventClient(f.eventClient)
 	}
 
 	return nil

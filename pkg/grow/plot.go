@@ -24,6 +24,7 @@ type PlotNode interface {
 	ConnectTo(next PlotNode) error
 	AddUpstream(name string)
 	BindInlet(logChan chan<- LogRecord, failChan chan<- FailRecord)
+	SetEventClient(eventClient EventClient)
 
 	StartAsync()
 	WaitAsync()
@@ -45,6 +46,8 @@ type Plot[S any, F any] struct {
 	seedChan   chan Payload[S]
 	fruitChans map[string]chan Payload[F]
 	upstreams  map[string]struct{}
+
+	eventClient EventClient
 
 	logSpout  *funnel.Spout[LogRecord]
 	failSpout *funnel.Spout[FailRecord]
@@ -80,6 +83,8 @@ func NewPlot[S any, F any](name string, cultivator func(S) (F, error), opts ...O
 		fruitChans: make(map[string]chan Payload[F]),
 		upstreams:  make(map[string]struct{}),
 
+		eventClient: NewLocalEventClient(),
+
 		ctx:    ctx,
 		cancel: cancel,
 	}
@@ -112,6 +117,11 @@ func (p *Plot[S, F]) StopSpouts() {
 	p.failSpout.Stop()
 }
 
+// setEventClient 设置 plot 的事件客户端。
+func (p *Plot[S, F]) SetEventClient(eventClient EventClient) {
+	p.eventClient = eventClient
+}
+
 // ==== Connection ====
 
 // AddUpstream 登记一个上游 plot 名称。
@@ -134,23 +144,6 @@ func (p *Plot[S, F]) ConnectTo(next PlotNode) error {
 
 	p.fruitChans[next.GetName()] = seedChan
 	return nil
-}
-
-// markSealed 处理一条 seal 信号并判断输入是否关闭。
-// sourceInput 表示外部调用者显式终止该 plot 的输入，此时直接关闭；
-// 否则需要等待所有已登记上游都发送过 seal 信号。
-func (p *Plot[S, F]) markSealed(source string, sealedFrom map[string]struct{}) bool {
-	if source == sourceInput {
-		return true
-	}
-	if source == "" {
-		return false
-	}
-	if _, ok := p.upstreams[source]; !ok {
-		return false
-	}
-	sealedFrom[source] = struct{}{}
-	return len(sealedFrom) == len(p.upstreams)
 }
 
 // ==== Getters ====
@@ -207,12 +200,16 @@ func (p *Plot[S, F]) bearFruit(seedPayload Payload[S], fruit F, startTime time.T
 	p.AddFruitNum(1)
 	p.reportProgress()
 
-	seedRepr := trunc(fmt.Sprintf("%+v", seedPayload.Value), 50)
+	seed := seedPayload.Value
+	seedID := seedPayload.EventID
+	fruitID := p.eventClient.Emit("fruit", []int{seedID})
+
+	seedRepr := trunc(fmt.Sprintf("%+v", seed), 50)
 	fruitRepr := trunc(fmt.Sprintf("%+v", fruit), 25)
 	useTime := time.Since(startTime).Seconds()
-	p.logInlet.SeedRipen(p.name, seedRepr, fruitRepr, useTime)
+	p.logInlet.SeedRipen(p.name, seedRepr, fruitRepr, useTime, seedID, fruitID)
 
-	fruitPayload := Payload[F]{Value: fruit}
+	fruitPayload := Payload[F]{Value: fruit, EventID: fruitID}
 	for _, ch := range p.fruitChans {
 		ch <- fruitPayload
 	}
@@ -223,14 +220,85 @@ func (p *Plot[S, F]) bearWeed(seedPayload Payload[S], err error, startTime time.
 	p.AddWeedNum(1)
 	p.reportProgress()
 
-	seedString := fmt.Sprintf("%+v", seedPayload.Value)
+	seed := seedPayload.Value
+	seedID := seedPayload.EventID
+	seedString := fmt.Sprintf("%+v", seed)
+	weedID := p.eventClient.Emit("weed", []int{seedID})
+
 	seedRepr := trunc(seedString, 50)
 	useTime := time.Since(startTime).Seconds()
-	p.logInlet.SeedWither(p.name, seedRepr, err, useTime)
+	p.logInlet.SeedWither(p.name, seedRepr, err, useTime, seedID, weedID)
 	p.failInlet.SeedWither(p.name, seedString, err)
 }
 
 // ==== Internal Pipeline ====
+
+// sprout 调度器：从 seedChan 读取种子，分发给 tend 协程并行处理。
+// 通过信号量控制最大并发数，并根据 seal 信号判断输入是否结束。
+// 外部 input seal 具有强终止语义：一旦收到，即不再等待剩余上游 seal。
+// 所有已接收种子处理完毕后，向所有 fruitChans 发送 SignalSeal 通知下游。
+func (p *Plot[S, F]) sprout() {
+	sem := make(chan struct{}, p.numTends)
+	done := make(chan struct{}, p.numTends)
+	sealedFrom := make(map[string]int, len(p.upstreams))
+
+	ctxCancel := false
+	inputClosed := false
+	inFlight := 0
+	shouldFinish := func() bool {
+		return ctxCancel || (inputClosed && inFlight == 0)
+	}
+
+	for {
+		if shouldFinish() {
+			patents := make([]int, 0, len(p.upstreams))
+			for _, sealID := range sealedFrom {
+				patents = append(patents, sealID)
+			}
+			sealID := p.eventClient.Emit("seal", patents)
+			sealPayload := Payload[F]{Signal: SignalSeal, Source: p.name, EventID: sealID}
+			for _, ch := range p.fruitChans {
+				ch <- sealPayload
+			}
+			return
+		}
+
+		select {
+		case seed := <-p.seedChan:
+			if seed.Signal == SignalSeal {
+				inputClosed = p.markSealed(seed.Source, seed.EventID, sealedFrom)
+				continue
+			}
+			p.AddSeedNum(1)
+
+			sem <- struct{}{}
+			inFlight++
+			go p.tend(seed, sem, done)
+		case <-done:
+			inFlight--
+		case <-p.ctx.Done():
+			ctxCancel = true
+		}
+	}
+}
+
+// markSealed 处理一条 seal 信号并判断输入是否关闭。
+// sourceInput 表示外部调用者显式终止该 plot 的输入，此时直接关闭；
+// 否则需要等待所有已登记上游都发送过 seal 信号。
+func (p *Plot[S, F]) markSealed(source string, sealID int, sealedFrom map[string]int) bool {
+	if source == sourceInput {
+		sealedFrom[sourceInput] = sealID
+		return true
+	}
+	if source == "" {
+		return false
+	}
+	if _, ok := p.upstreams[source]; !ok {
+		return false
+	}
+	sealedFrom[source] = sealID
+	return len(sealedFrom) == len(p.upstreams)
+}
 
 // tend 照料单颗种子：执行 cultivator 并在失败时按策略重试。
 // 完成后通过 bearFruit 或 bearWeed 路由结果。
@@ -248,9 +316,13 @@ func (p *Plot[S, F]) tend(seedPayload Payload[S], sem chan struct{}, done chan s
 
 	var fruit F
 	var err error
+	var replantID int
+
+	seed := seedPayload.Value
+	seedID := seedPayload.EventID
 
 	for attempt := 1; attempt <= p.maxRetries+1; attempt++ {
-		fruit, err = p.cultivator(seedPayload.Value)
+		fruit, err = p.cultivator(seed)
 		if err == nil {
 			break
 		}
@@ -258,59 +330,18 @@ func (p *Plot[S, F]) tend(seedPayload Payload[S], sem chan struct{}, done chan s
 			break
 		}
 		if attempt <= p.maxRetries {
-			p.logInlet.SeedReplant(p.name, seedRepr, attempt, err)
+			replantID = p.eventClient.Emit("replant", []int{seedID})
+			p.logInlet.SeedReplant(p.name, seedRepr, attempt, err, seedID, replantID)
+			seedID = replantID
 		}
 		time.Sleep(p.retryDelay(attempt))
 	}
 
+	seedPayload = Payload[S]{Value: seed, EventID: seedID}
 	if err != nil {
 		p.bearWeed(seedPayload, err, startTime)
 	} else {
 		p.bearFruit(seedPayload, fruit, startTime)
-	}
-}
-
-// sprout 调度器：从 seedChan 读取种子，分发给 tend 协程并行处理。
-// 通过信号量控制最大并发数，并根据 seal 信号判断输入是否结束。
-// 外部 input seal 具有强终止语义：一旦收到，即不再等待剩余上游 seal。
-// 所有已接收种子处理完毕后，向所有 fruitChans 发送 SignalSeal 通知下游。
-func (p *Plot[S, F]) sprout() {
-	sem := make(chan struct{}, p.numTends)
-	done := make(chan struct{}, p.numTends)
-	sealedFrom := make(map[string]struct{}, len(p.upstreams))
-
-	ctxCancel := false
-	inputClosed := false
-	inFlight := 0
-	shouldFinish := func() bool {
-		return ctxCancel || (inputClosed && inFlight == 0)
-	}
-
-	for {
-		if shouldFinish() {
-			sealPayload := Payload[F]{Signal: SignalSeal, Source: p.name}
-			for _, ch := range p.fruitChans {
-				ch <- sealPayload
-			}
-			return
-		}
-
-		select {
-		case seed := <-p.seedChan:
-			if seed.Signal == SignalSeal {
-				inputClosed = p.markSealed(seed.Source, sealedFrom)
-				continue
-			}
-			p.AddSeedNum(1)
-
-			sem <- struct{}{}
-			inFlight++
-			go p.tend(seed, sem, done)
-		case <-done:
-			inFlight--
-		case <-p.ctx.Done():
-			ctxCancel = true
-		}
 	}
 }
 
@@ -330,14 +361,16 @@ func (p *Plot[S, F]) SeedAny(seed any) error {
 // Seed 播入单颗种子到 seedChan。
 // 该输入视为外部调用者注入，而非来自某个上游 plot。
 func (p *Plot[S, F]) Seed(seed S) {
-	p.seedChan <- Payload[S]{Value: seed}
+	seedId := p.eventClient.Emit("seed", []int{})
+	p.seedChan <- Payload[S]{Value: seed, EventID: seedId}
 }
 
 // Seal 向 seedChan 发送来自外部 input 的 SignalSeal。
 // 这表示外部调用者要求终止该 plot 的后续输入处理；对于已连接上游的
 // plot，这同样会触发强终止，而不是继续等待剩余上游 seal。
 func (p *Plot[S, F]) Seal() {
-	p.seedChan <- Payload[S]{Signal: SignalSeal, Source: sourceInput}
+	sealId := p.eventClient.Emit("seal", []int{})
+	p.seedChan <- Payload[S]{Signal: SignalSeal, Source: sourceInput, EventID: sealId}
 }
 
 // StartAsync 异步启动 sprout 调度器。
