@@ -4,7 +4,7 @@ OUT := bin
 
 # ---------- duplicate ----------
 DUPLICATE_NAME := duplicate
-DUPLICATE_BIN := $(OUT)/$(DUPLICATE_NAME).exe
+DUPLICATE_BIN := $(OUT)/$(DUPLICATE_NAME)
 DUPLICATE_PKG := ./cmd/duplicate
 
 DUPLICATE_SRC := cmd/duplicate/main.go
