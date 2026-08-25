@@ -1,11 +1,26 @@
 package grow_test
 
 import (
+	"fmt"
 	"reflect"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/Mr-xiaotian/CelestialForge/pkg/grow"
 )
+
+func canonicalizeSCCs(sccs [][]string) [][]string {
+	canonical := make([][]string, len(sccs))
+	for i, scc := range sccs {
+		canonical[i] = append([]string(nil), scc...)
+		sort.Strings(canonical[i])
+	}
+	sort.Slice(canonical, func(i, j int) bool {
+		return strings.Join(canonical[i], ",") < strings.Join(canonical[j], ",")
+	})
+	return canonical
+}
 
 func TestOrderGraph_BasicOperations(t *testing.T) {
 	graph := grow.NewOrderGraph()
@@ -88,27 +103,30 @@ func TestGraphAlgorithms_SCCAndCondensation(t *testing.T) {
 		t.Fatalf("unexpected SCC count: got %d want 2", len(sccs))
 	}
 
-	wantSCCs := [][]string{{"d", "c"}, {"b", "a"}}
-	if !reflect.DeepEqual(sccs, wantSCCs) {
+	wantSCCs := [][]string{{"a", "b"}, {"c", "d"}}
+	if !reflect.DeepEqual(canonicalizeSCCs(sccs), canonicalizeSCCs(wantSCCs)) {
 		t.Fatalf("unexpected SCCs: got %v want %v", sccs, wantSCCs)
 	}
 
 	sourceSCCs := grow.SourceSCCs(graph)
-	wantSourceSCCs := [][]string{{"b", "a"}}
-	if !reflect.DeepEqual(sourceSCCs, wantSourceSCCs) {
+	wantSourceSCCs := [][]string{{"a", "b"}}
+	if !reflect.DeepEqual(canonicalizeSCCs(sourceSCCs), canonicalizeSCCs(wantSourceSCCs)) {
 		t.Fatalf("unexpected source SCCs: got %v want %v", sourceSCCs, wantSourceSCCs)
 	}
 
-	condensation, _ := grow.GetCondensation(graph)
-	wantCondensationNodes := []string{"scc_0", "scc_1"}
-	if !reflect.DeepEqual(condensation.Nodes(), wantCondensationNodes) {
-		t.Fatalf("unexpected condensation nodes: got %v want %v", condensation.Nodes(), wantCondensationNodes)
+	condensation, condensationSCCs := grow.GetCondensation(graph)
+	if len(condensationSCCs) != 2 {
+		t.Fatalf("unexpected condensation SCC count: got %d want 2", len(condensationSCCs))
 	}
 
-	wantCondensationEdges := map[string][]string{
-		"scc_0": {},
-		"scc_1": {"scc_0"},
+	mapping := grow.NodeToSCCIndex(condensationSCCs)
+	if mapping["a"] != mapping["b"] || mapping["c"] != mapping["d"] || mapping["a"] == mapping["c"] {
+		t.Fatalf("unexpected condensation SCC mapping: %v", mapping)
 	}
+
+	from := fmt.Sprintf("scc_%d", mapping["a"])
+	to := fmt.Sprintf("scc_%d", mapping["c"])
+	wantCondensationEdges := map[string][]string{from: {to}, to: {}}
 	if !reflect.DeepEqual(condensation.OutEdges(), wantCondensationEdges) {
 		t.Fatalf("unexpected condensation edges: got %v want %v", condensation.OutEdges(), wantCondensationEdges)
 	}
