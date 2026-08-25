@@ -9,7 +9,7 @@ import (
 	"github.com/Mr-xiaotian/CelestialForge/pkg/grow"
 )
 
-// 重试后成功
+// 重试后成功。
 func TestPlot_RetrySuccess(t *testing.T) {
 	var attempts atomic.Int32
 	cultivator := func(seed int) (int, error) {
@@ -24,20 +24,21 @@ func TestPlot_RetrySuccess(t *testing.T) {
 		grow.WithTends(1),
 		grow.WithMaxRetries(3),
 	)
-	karmas := plot.Start([]int{1})
+	plot.Run([]int{1})
+	records := mustHarvest(t, plot)
 
-	if len(karmas) != 1 {
-		t.Fatalf("expected 1 fruit, got %d", len(karmas))
+	if len(records) != 1 {
+		t.Fatalf("expected 1 status, got %d", len(records))
 	}
-	if karmas[0].Fruit != 10 {
-		t.Errorf("expected fruit 10, got %d", karmas[0].Fruit)
+	if records[0].Status != "success" || records[0].ResultJSON != "10" {
+		t.Fatalf("expected success/result 10, got %#v", records[0])
 	}
 	if attempts.Load() != 3 {
 		t.Errorf("expected 3 attempts, got %d", attempts.Load())
 	}
 }
 
-// 重试耗尽仍失败
+// 重试耗尽仍失败。
 func TestPlot_RetryExhausted(t *testing.T) {
 	var attempts atomic.Int32
 	cultivator := func(seed int) (int, error) {
@@ -49,17 +50,21 @@ func TestPlot_RetryExhausted(t *testing.T) {
 		grow.WithTends(1),
 		grow.WithMaxRetries(2),
 	)
-	karmas := plot.Start([]int{1})
+	plot.Run([]int{1})
+	records := mustHarvest(t, plot)
 
-	if len(karmas) != 0 {
-		t.Errorf("expected 0 karmas, got %d", len(karmas))
+	if len(records) != 1 {
+		t.Fatalf("expected 1 status, got %d", len(records))
+	}
+	if records[0].Status != "failed" || records[0].ErrorMessage != "permanent error" {
+		t.Fatalf("expected failed/permanent error, got %#v", records[0])
 	}
 	if attempts.Load() != 3 {
 		t.Errorf("expected 3 attempts (1 + 2 retries), got %d", attempts.Load())
 	}
 }
 
-// retryIf 过滤不可重试错误
+// retryIf 过滤不可重试错误。
 func TestPlot_RetryIf(t *testing.T) {
 	var attempts atomic.Int32
 	permanent := errors.New("permanent")
@@ -75,17 +80,21 @@ func TestPlot_RetryIf(t *testing.T) {
 			return !errors.Is(err, permanent)
 		}),
 	)
-	karmas := plot.Start([]int{1})
+	plot.Run([]int{1})
+	records := mustHarvest(t, plot)
 
-	if len(karmas) != 0 {
-		t.Errorf("expected 0 karmas, got %d", len(karmas))
+	if len(records) != 1 {
+		t.Fatalf("expected 1 status, got %d", len(records))
+	}
+	if records[0].Status != "failed" || records[0].ErrorMessage != "permanent" {
+		t.Fatalf("expected failed/permanent, got %#v", records[0])
 	}
 	if attempts.Load() != 1 {
 		t.Errorf("expected 1 attempt (no retry for permanent error), got %d", attempts.Load())
 	}
 }
 
-// retryDelay 验证间隔被调用
+// retryDelay 验证间隔被调用。
 func TestPlot_RetryDelay(t *testing.T) {
 	var attempts atomic.Int32
 	cultivator := func(seed int) (int, error) {
@@ -104,11 +113,15 @@ func TestPlot_RetryDelay(t *testing.T) {
 			return 100 * time.Millisecond
 		}),
 	)
-	karmas := plot.Start([]int{1})
+	plot.Run([]int{1})
 	elapsed := time.Since(start)
+	records := mustHarvest(t, plot)
 
-	if len(karmas) != 1 {
-		t.Fatalf("expected 1 fruit, got %d", len(karmas))
+	if len(records) != 1 {
+		t.Fatalf("expected 1 status, got %d", len(records))
+	}
+	if records[0].Status != "success" || records[0].ResultJSON != "1" {
+		t.Fatalf("expected success/result 1, got %#v", records[0])
 	}
 	if elapsed < 100*time.Millisecond {
 		t.Errorf("expected at least 100ms delay, got %v", elapsed)
