@@ -64,38 +64,7 @@ CREATE INDEX IF NOT EXISTS idx_status_plot_status_ts ON status(plot, status, ts)
 CREATE INDEX IF NOT EXISTS idx_status_current_event ON status(current_event_id);
 `
 
-// OpenLifecycleSQLite 打开 sqlite 数据库并确保表结构存在。
-func OpenLifecycleSQLite(dbPath string) (*sql.DB, error) {
-	dsn := dbPath
-	if dbPath != ":memory:" {
-		dsn = fmt.Sprintf("file:%s", filepath.ToSlash(dbPath))
-	}
-
-	db, err := sql.Open("sqlite", dsn)
-	if err != nil {
-		return nil, fmt.Errorf("open lifecycle sqlite: %w", err)
-	}
-
-	if err := configureLifecycleSQLite(db); err != nil {
-		_ = db.Close()
-		return nil, err
-	}
-
-	if err := EnsureLifecycleSQLiteSchema(db); err != nil {
-		_ = db.Close()
-		return nil, err
-	}
-
-	return db, nil
-}
-
-// EnsureLifecycleSQLiteSchema 确保生命周期持久化所需的表和索引存在。
-func EnsureLifecycleSQLiteSchema(db *sql.DB) error {
-	if _, err := db.Exec(lifecycleSQLiteSchema); err != nil {
-		return fmt.Errorf("ensure lifecycle sqlite schema: %w", err)
-	}
-	return nil
-}
+// ==== events 表操作 ====
 
 // InsertLifecycleEvent 写入一条事件记录及其父事件边。
 func InsertLifecycleEvent(db *sql.DB, record LifecycleEventRecord, parentIDs []int) error {
@@ -130,6 +99,54 @@ func InsertLifecycleEvent(db *sql.DB, record LifecycleEventRecord, parentIDs []i
 	}
 	return nil
 }
+
+// ==== events 表查询 ====
+
+// LoadLifecycleEvent 读取一条事件记录。
+func LoadLifecycleEvent(db *sql.DB, eventID int) (LifecycleEventRecord, error) {
+	var record LifecycleEventRecord
+	err := db.QueryRow(
+		`SELECT event_id, event_type, plot, ts FROM events WHERE event_id = ?`,
+		eventID,
+	).Scan(
+		&record.EventID,
+		&record.EventType,
+		&record.Plot,
+		&record.TS,
+	)
+	if err != nil {
+		return LifecycleEventRecord{}, fmt.Errorf("load lifecycle event %d: %w", eventID, err)
+	}
+	return record, nil
+}
+
+// LoadLifecycleEventParents 按 event_id 读取全部父事件 ID。
+func LoadLifecycleEventParents(db *sql.DB, eventID int) ([]int, error) {
+	rows, err := db.Query(
+		`SELECT parent_id FROM event_parents WHERE event_id = ? ORDER BY parent_id`,
+		eventID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query lifecycle event parents for %d: %w", eventID, err)
+	}
+	defer rows.Close()
+
+	parentIDs := make([]int, 0)
+	for rows.Next() {
+		var parentID int
+		if err := rows.Scan(&parentID); err != nil {
+			return nil, fmt.Errorf("scan lifecycle event parent for %d: %w", eventID, err)
+		}
+		parentIDs = append(parentIDs, parentID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate lifecycle event parents for %d: %w", eventID, err)
+	}
+
+	return parentIDs, nil
+}
+
+// ==== status 表操作 ====
 
 // UpsertLifecycleStatus 写入或覆盖一条当前状态快照。
 func UpsertLifecycleStatus(db *sql.DB, record LifecycleStatusRecord) error {
@@ -211,49 +228,7 @@ func PromoteLifecycleStatusFailed(
 	return nil
 }
 
-// LoadLifecycleEvent 读取一条事件记录。
-func LoadLifecycleEvent(db *sql.DB, eventID int) (LifecycleEventRecord, error) {
-	var record LifecycleEventRecord
-	err := db.QueryRow(
-		`SELECT event_id, event_type, plot, ts FROM events WHERE event_id = ?`,
-		eventID,
-	).Scan(
-		&record.EventID,
-		&record.EventType,
-		&record.Plot,
-		&record.TS,
-	)
-	if err != nil {
-		return LifecycleEventRecord{}, fmt.Errorf("load lifecycle event %d: %w", eventID, err)
-	}
-	return record, nil
-}
-
-// LoadLifecycleEventParents 按 event_id 读取全部父事件 ID。
-func LoadLifecycleEventParents(db *sql.DB, eventID int) ([]int, error) {
-	rows, err := db.Query(
-		`SELECT parent_id FROM event_parents WHERE event_id = ? ORDER BY parent_id`,
-		eventID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("query lifecycle event parents for %d: %w", eventID, err)
-	}
-	defer rows.Close()
-
-	parentIDs := make([]int, 0)
-	for rows.Next() {
-		var parentID int
-		if err := rows.Scan(&parentID); err != nil {
-			return nil, fmt.Errorf("scan lifecycle event parent for %d: %w", eventID, err)
-		}
-		parentIDs = append(parentIDs, parentID)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate lifecycle event parents for %d: %w", eventID, err)
-	}
-
-	return parentIDs, nil
-}
+// ==== status 表查询 ====
 
 // LoadLifecycleStatus 读取一条状态快照。
 func LoadLifecycleStatus(db *sql.DB, inputEventID int) (LifecycleStatusRecord, error) {
@@ -281,6 +256,83 @@ func LoadLifecycleStatus(db *sql.DB, inputEventID int) (LifecycleStatusRecord, e
 		return LifecycleStatusRecord{}, fmt.Errorf("load lifecycle status for input event %d: %w", inputEventID, err)
 	}
 	return record, nil
+}
+
+// LoadLifecycleStatuses 读取指定 plot 的全部任务状态快照。
+func LoadLifecycleStatuses(db *sql.DB, plotName string) ([]LifecycleStatusRecord, error) {
+	rows, err := db.Query(
+		`
+		SELECT input_event_id, current_event_id, task_json, plot, status,
+		       error_type, error_message, result_json, ts
+		FROM status
+		WHERE plot = ?
+		ORDER BY ts, input_event_id
+		`,
+		plotName,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query lifecycle statuses for plot %q: %w", plotName, err)
+	}
+	defer rows.Close()
+
+	records := make([]LifecycleStatusRecord, 0)
+	for rows.Next() {
+		var record LifecycleStatusRecord
+		if err := rows.Scan(
+			&record.InputEventID,
+			&record.CurrentEventID,
+			&record.TaskJSON,
+			&record.Plot,
+			&record.Status,
+			&record.ErrorType,
+			&record.ErrorMessage,
+			&record.ResultJSON,
+			&record.TS,
+		); err != nil {
+			return nil, fmt.Errorf("scan lifecycle status for plot %q: %w", plotName, err)
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate lifecycle statuses for plot %q: %w", plotName, err)
+	}
+
+	return records, nil
+}
+
+// ==== sqlite 配置与事务工具函数 ====
+
+// OpenLifecycleSQLite 打开 sqlite 数据库并确保表结构存在。
+func OpenLifecycleSQLite(dbPath string) (*sql.DB, error) {
+	dsn := dbPath
+	if dbPath != ":memory:" {
+		dsn = fmt.Sprintf("file:%s", filepath.ToSlash(dbPath))
+	}
+
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("open lifecycle sqlite: %w", err)
+	}
+
+	if err := configureLifecycleSQLite(db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+
+	if err := EnsureLifecycleSQLiteSchema(db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+
+	return db, nil
+}
+
+// EnsureLifecycleSQLiteSchema 确保生命周期持久化所需的表和索引存在。
+func EnsureLifecycleSQLiteSchema(db *sql.DB) error {
+	if _, err := db.Exec(lifecycleSQLiteSchema); err != nil {
+		return fmt.Errorf("ensure lifecycle sqlite schema: %w", err)
+	}
+	return nil
 }
 
 // configureLifecycleSQLite 初始化当前连接的 sqlite 运行参数。
