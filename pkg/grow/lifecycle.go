@@ -109,6 +109,15 @@ func (l *LifecycleRecordHandler) AfterStop() error {
 	return nil
 }
 
+// LoadStatuses 读取指定 plot 的全部任务状态快照。
+func (l *LifecycleRecordHandler) LoadStatuses(plotName string) ([]LifecycleStatusRecord, error) {
+	if l.sqliteDB == nil {
+		return nil, fmt.Errorf("生命周期 sqlite 未初始化")
+	}
+
+	return LoadLifecycleStatuses(l.sqliteDB, plotName)
+}
+
 // LifecycleInlet 生产生命周期记录。
 type LifecycleInlet struct {
 	funnel.Inlet[LifecycleRecord]

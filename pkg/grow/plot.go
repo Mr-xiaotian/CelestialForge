@@ -393,6 +393,22 @@ func (p *Plot[S, F]) WaitAsync() {
 	p.wg.Wait()
 }
 
+// Harvest 读取当前 plot 已持久化的全部任务状态快照。
+func (p *Plot[S, F]) Harvest() ([]LifecycleStatusRecord, error) {
+	if p.lifecycleSpout == nil {
+		return nil, fmt.Errorf("plot %q lifecycle spout is nil", p.name)
+	}
+
+	queryHandler, ok := p.lifecycleSpout.Handler().(interface {
+		LoadStatuses(plotName string) ([]LifecycleStatusRecord, error)
+	})
+	if !ok {
+		return nil, fmt.Errorf("plot %q lifecycle handler does not support status queries", p.name)
+	}
+
+	return queryHandler.LoadStatuses(p.name)
+}
+
 // ==== Run ====
 
 // Run 在 standalone 模式下启动 Plot 并处理所有种子。

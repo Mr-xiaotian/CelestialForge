@@ -101,3 +101,8 @@ func (b *Spout[T]) Stop() error {
 	b.handler.AfterStop()
 	return err
 }
+
+// Handler 返回当前 Spout 持有的 record handler。
+func (b *Spout[T]) Handler() RecordHandler[T] {
+	return b.handler
+}
