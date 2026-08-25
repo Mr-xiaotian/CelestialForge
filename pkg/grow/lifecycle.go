@@ -40,7 +40,7 @@ type LifecycleRecordHandler struct {
 func (l *LifecycleRecordHandler) BeforeStart() error {
 	today := time.Now().Format("2006-01-02")
 	now := time.Now().Format("15-04-05.000")
-	dir := filepath.Join("lifecycle", today)
+	dir := filepath.Join("lifecycles", today)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("创建生命周期目录失败: %w", err)
 	}
@@ -111,11 +111,21 @@ func (l *LifecycleRecordHandler) AfterStop() error {
 
 // LoadStatuses 读取指定 plot 的全部任务状态快照。
 func (l *LifecycleRecordHandler) LoadStatuses(plotName string) ([]LifecycleStatusRecord, error) {
-	if l.sqliteDB == nil {
+	if l.sqliteDB != nil {
+		return LoadLifecycleStatuses(l.sqliteDB, plotName)
+	}
+
+	if l.SQLitePath == "" {
 		return nil, fmt.Errorf("生命周期 sqlite 未初始化")
 	}
 
-	return LoadLifecycleStatuses(l.sqliteDB, plotName)
+	db, err := OpenLifecycleSQLite(l.SQLitePath)
+	if err != nil {
+		return nil, fmt.Errorf("重新打开生命周期 sqlite 失败: %w", err)
+	}
+	defer db.Close()
+
+	return LoadLifecycleStatuses(db, plotName)
 }
 
 // LifecycleInlet 生产生命周期记录。
