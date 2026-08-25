@@ -8,7 +8,7 @@ import (
 	"github.com/Mr-xiaotian/CelestialForge/pkg/grow"
 )
 
-func TestFarmStartLinear(t *testing.T) {
+func TestFarmRunLinear(t *testing.T) {
 	root := grow.NewPlot("root", func(seed int) (int, error) { return seed * 2, nil }, grow.WithTends(2))
 
 	var (
@@ -30,10 +30,10 @@ func TestFarmStartLinear(t *testing.T) {
 		t.Fatalf("Connect() error = %v", err)
 	}
 
-	if err := farm.Start(map[string][]any{
+	if err := farm.Run(map[string][]any{
 		"root": {1, 2, 3},
 	}); err != nil {
-		t.Fatalf("Start() error = %v", err)
+		t.Fatalf("Run() error = %v", err)
 	}
 
 	sort.Ints(results)

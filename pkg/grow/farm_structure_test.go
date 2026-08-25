@@ -53,10 +53,10 @@ func TestFarmStructure121(t *testing.T) {
 		inputs = append(inputs, i)
 	}
 
-	if err := farm.Start(map[string][]any{
+	if err := farm.Run(map[string][]any{
 		"root": inputs,
 	}); err != nil {
-		t.Fatalf("Start() error = %v", err)
+		t.Fatalf("Run() error = %v", err)
 	}
 
 	if got := len(counts); got != seedCount*2 {
@@ -135,10 +135,10 @@ func TestFarmStructure121PartialFailure(t *testing.T) {
 		inputs = append(inputs, i)
 	}
 
-	if err := farm.Start(map[string][]any{
+	if err := farm.Run(map[string][]any{
 		"root": inputs,
 	}); err != nil {
-		t.Fatalf("Start() error = %v", err)
+		t.Fatalf("Run() error = %v", err)
 	}
 
 	// root: 20 seed, 10 fruit, 10 weed
@@ -236,12 +236,12 @@ func TestFarmStructureDisconnectedComponents(t *testing.T) {
 		inputsB2 = append(inputsB2, i)
 	}
 
-	if err := farm.Start(map[string][]any{
+	if err := farm.Run(map[string][]any{
 		"rootA":  inputsA,
 		"rootB1": inputsB1,
 		"rootB2": inputsB2,
 	}); err != nil {
-		t.Fatalf("Start() error = %v", err)
+		t.Fatalf("Run() error = %v", err)
 	}
 
 	// 验证第一组: rootA fan-out 到 midA1, midA2，各收到 seedCount 个
@@ -319,11 +319,11 @@ func TestFarmStructure21FaninDifferentSpeed(t *testing.T) {
 		slowInputs = append(slowInputs, i)
 	}
 
-	if err := farm.Start(map[string][]any{
+	if err := farm.Run(map[string][]any{
 		"rootFast": fastInputs,
 		"rootSlow": slowInputs,
 	}); err != nil {
-		t.Fatalf("Start() error = %v", err)
+		t.Fatalf("Run() error = %v", err)
 	}
 
 	if visited != seedCount*2 {

@@ -19,10 +19,10 @@ func TestFarmEventTraceLinear(t *testing.T) {
 		t.Fatalf("Connect() error = %v", err)
 	}
 
-	if err := farm.Start(map[string][]any{
+	if err := farm.Run(map[string][]any{
 		"root": {3},
 	}); err != nil {
-		t.Fatalf("Start() error = %v", err)
+		t.Fatalf("Run() error = %v", err)
 	}
 
 	handler, ok := farm.lifecycleSpout.Handler().(*LifecycleRecordHandler)
