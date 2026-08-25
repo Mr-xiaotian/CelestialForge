@@ -1,6 +1,7 @@
 package file
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -11,6 +12,37 @@ import (
 )
 
 // ==== Pipeline Stages ====
+
+// harvestStatusMap 将 plot 的生命周期状态还原为 path -> hash 映射。
+func harvestStatusMap(plot *grow.Plot[string, string]) (map[string]string, error) {
+	records, err := plot.Harvest()
+	if err != nil {
+		return nil, err
+	}
+
+	resultMap := make(map[string]string, len(records))
+	for _, record := range records {
+		var path string
+		if err := json.Unmarshal([]byte(record.TaskJSON), &path); err != nil {
+			return nil, fmt.Errorf("解析任务路径失败: %w", err)
+		}
+
+		switch record.Status {
+		case "success":
+			var hash string
+			if err := json.Unmarshal([]byte(record.ResultJSON), &hash); err != nil {
+				return nil, fmt.Errorf("解析任务结果失败: %w", err)
+			}
+			resultMap[path] = hash
+		case "failed":
+			return nil, fmt.Errorf("处理文件失败 %q: %s", path, record.ErrorMessage)
+		default:
+			return nil, fmt.Errorf("任务 %q 处于未完成状态: %s", path, record.Status)
+		}
+	}
+
+	return resultMap, nil
+}
 
 // getSizeDuplicate 按文件大小分组，返回存在大小重复的文件路径。
 func getSizeDuplicate(fileInfoMap FileInfoMap) []string {
@@ -35,12 +67,17 @@ func getSnapshotDuplicate(fileSizeDuplicates []string, numTends int) ([]string, 
 	// 并行计算文件hash
 	plot := grow.NewPlot("SnapshotPlot", GetFileSnapshotSHA1, grow.WithTends(numTends))
 	plot.AddObserver(grow.NewProgressBar("Snapshoting files"))
-	karmas := plot.Start(fileSizeDuplicates)
+	plot.Run(fileSizeDuplicates)
+
+	fileSnapshotByPath, err := harvestStatusMap(plot)
+	if err != nil {
+		return nil, err
+	}
 
 	// 收集结果
 	fileSnapshotMap := map[string][]string{}
-	for _, kar := range karmas {
-		fileSnapshotMap[kar.Fruit] = append(fileSnapshotMap[kar.Fruit], kar.Seed)
+	for path, snapshot := range fileSnapshotByPath {
+		fileSnapshotMap[snapshot] = append(fileSnapshotMap[snapshot], path)
 	}
 
 	var fileSnapshotDuplicates []string
@@ -59,12 +96,17 @@ func getHashDuplicate(fileSnapshotDuplicates []string, fileInfoMap FileInfoMap, 
 	// 并行计算文件hash
 	plot := grow.NewPlot("HashPlot", GetFileSHA1, grow.WithTends(numTends))
 	plot.AddObserver(grow.NewProgressBar("Hashing files"))
-	karmas := plot.Start(fileSnapshotDuplicates)
+	plot.Run(fileSnapshotDuplicates)
+
+	fileHashByPath, err := harvestStatusMap(plot)
+	if err != nil {
+		return nil, err
+	}
 
 	// 收集结果
 	fileHashMap := map[string][]string{}
-	for _, kar := range karmas {
-		fileHashMap[kar.Fruit] = append(fileHashMap[kar.Fruit], kar.Seed)
+	for path, hash := range fileHashByPath {
+		fileHashMap[hash] = append(fileHashMap[hash], path)
 	}
 	fileHashDuplicates := map[FileInfo][]string{}
 	for hash, paths := range fileHashMap {
