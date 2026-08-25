@@ -93,7 +93,8 @@ func (p *Plot[S, F]) AddObserver(observer Observer) {
 // ==== Initialization ====
 
 // BindInlet 绑定日志和失败记录的写入通道。
-// standalone 模式由 InitLocalEnv 内部调用；Farm 模式由 Farm.Start 统一调用。
+// standalone 模式由 Run 创建本地 spout 后调用；
+// Farm 模式由 Farm.Start 统一调用。
 func (p *Plot[S, F]) BindInlet(logChan chan<- LogRecord, failChan chan<- FailRecord) {
 	p.logInlet = NewLogInlet(logChan, time.Second, p.logLevel)
 	p.failInlet = NewFailInlet(failChan, time.Second)
@@ -313,7 +314,7 @@ func (p *Plot[S, F]) sprout() {
 	}
 }
 
-// ==== Async API ====
+// ==== Start ====
 
 // SeedAny 以 any 类型播入单颗种子，内部做类型断言。
 // 供 Farm 统一注入初始任务时使用。
@@ -355,16 +356,19 @@ func (p *Plot[S, F]) StartAsync() {
 	})
 }
 
-// WaitAsync 等待异步 Plot 的所有协程（sprout、Harvest、Seed、Seal）退出。
+// WaitAsync 等待异步 Plot 的后台协程退出。
 func (p *Plot[S, F]) WaitAsync() {
 	p.wg.Wait()
 }
 
 // ==== Run ====
 
+// Run 在 standalone 模式下启动 Plot 并处理所有种子。
+// 它会创建本地日志/失败 spout，绑定 inlet，并在所有输入完成后阻塞等待退出。
 func (p *Plot[S, F]) Run(seeds []S) {
 	p.logSpout = funnel.NewSpout(&LogRecordHandler{}, 100, time.Second)
 	p.failSpout = funnel.NewSpout(&FailRecordHandler{}, 100, time.Second)
+	p.BindInlet(p.logSpout.GetQueue(), p.failSpout.GetQueue())
 
 	p.StartSpouts()
 	defer p.StopSpouts()
