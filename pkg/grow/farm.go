@@ -27,7 +27,7 @@ type Farm struct {
 	lifecycleInlet *LifecycleInlet
 }
 
-// ==== Constructor ====
+// ==== Construction ====
 
 // NewFarm 创建一个 Farm 实例。
 // name 为 farm 名称（用于日志标识），logLevel 为全局日志级别。
@@ -85,7 +85,7 @@ func (f *Farm) Connected(from, to string) bool {
 // ==== Registration ====
 
 // AddPlot 将一个或多个 plot 注册到 farm。
-// plot 名称不能为空且必须唯一，注册时默认标记为 root 和 head。
+// plot 名称不能为空且必须唯一；注册时会加入拓扑图并共享 Farm 的事件客户端。
 func (f *Farm) AddPlot(plots ...PlotNode) error {
 	for _, plot := range plots {
 		if plot == nil {
@@ -139,7 +139,7 @@ func uniquePlots(plots []PlotNode) []PlotNode {
 	return unique
 }
 
-// addEdge 记录一条 from → to 的有向边，并更新 root/head 状态。
+// addEdge 记录一条 from → to 的有向边，并同步更新顺序图。
 func (f *Farm) addEdge(from, to string) {
 	if f.edges[from] == nil {
 		f.edges[from] = make(map[string]struct{})
@@ -188,8 +188,8 @@ func (f *Farm) Connect(fromPlots []PlotNode, toPlots []PlotNode) error {
 
 // ==== Execution ====
 
-// validateStartInputs 校验输入参数：plot 必须已注册且为 root。
-func (f *Farm) validateStartInputs(inputs map[string][]any) error {
+// validateRunInputs 校验输入参数中的 plot 均已注册到 farm。
+func (f *Farm) validateRunInputs(inputs map[string][]any) error {
 	for name := range inputs {
 		_, ok := f.plots[name]
 		if !ok {
@@ -199,12 +199,12 @@ func (f *Farm) validateStartInputs(inputs map[string][]any) error {
 	return nil
 }
 
-// Start 同步启动整张 farm 图。
-// inputs 按 plot 名称声明初始种子，仅允许注入 source plot。
-// 流程：启动全局 spout → 绑定各 plot inlet → 启动所有 plot →
-// 注入种子 → 封闭所有 source → 等待所有 plot 完成 → 停止 spout。
-func (f *Farm) Start(inputs map[string][]any) error {
-	if err := f.validateStartInputs(inputs); err != nil {
+// Run 同步运行整张 farm 图。
+// inputs 按 plot 名称声明初始种子；这些种子会在各 plot 启动后被注入。
+// 流程：计算 source 节点 → 启动全局 spout → 绑定各 plot inlet → 启动所有 plot →
+// 注入种子 → 向所有 source 发送 seal → 等待所有 plot 完成 → 停止 spout。
+func (f *Farm) Run(inputs map[string][]any) error {
+	if err := f.validateRunInputs(inputs); err != nil {
 		return err
 	}
 

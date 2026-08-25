@@ -14,8 +14,8 @@ import (
 
 // PlotNode 是 Farm 管理 plot 时使用的统一接口。
 // 它擦除了泛型参数，使 Farm 可以用同一类型持有不同种子/果实类型的 Plot。
-// 同时覆盖建图阶段（ConnectTo、AddUpstream、BindInlet）
-// 和运行阶段（StartAsync、WaitAsync、SeedAny、Seal）所需的最小能力。
+// 接口覆盖图连接（ConnectTo、AddUpstream）、运行装配（BindInlet、SetEventClient）
+// 以及执行控制（StartAsync、WaitAsync、SeedAny、Seal）所需的最小能力。
 type PlotNode interface {
 	GetName() string
 	GetState() int32
@@ -34,8 +34,9 @@ type PlotNode interface {
 
 // ==== Struct ====
 
-// Plot 并发种子培育器。将一组种子分发给 tend 池并行培育，
-// 通过 funnel 系统异步记录日志和失败信息。
+// Plot 是可连接的并发种子培育节点。
+// 它将输入种子分发给 tend 池并行培育，通过 funnel 系统异步记录日志与
+// 生命周期状态，并在成功时向下游 plot 转发 fruit。
 // S 为种子类型，F 为果实类型。
 type Plot[S any, F any] struct {
 	name       string
@@ -61,7 +62,7 @@ type Plot[S any, F any] struct {
 	Counter
 }
 
-// ==== Constructor ====
+// ==== Construction ====
 
 // NewPlot 创建一个 Plot 实例。
 // name 为 plot 名称（在 Farm 中需唯一），cultivator 为培育函数，
@@ -90,6 +91,8 @@ func NewPlot[S any, F any](name string, cultivator func(S) (F, error), opts ...O
 	}
 }
 
+// ==== Observer Registration ====
+
 // AddObserver 添加一个进度观察者。
 func (p *Plot[S, F]) AddObserver(observer Observer) {
 	p.observers = append(p.observers, observer)
@@ -99,7 +102,7 @@ func (p *Plot[S, F]) AddObserver(observer Observer) {
 
 // BindInlet 绑定日志和生命周期记录的写入通道。
 // standalone 模式由 Run 创建本地 spout 后调用；
-// Farm 模式由 Farm.Start 统一调用。
+// Farm 模式由 Farm.Run 统一调用。
 func (p *Plot[S, F]) BindInlet(logChan chan<- LogRecord, lifecycleChan chan<- LifecycleRecord) {
 	p.logInlet = NewLogInlet(logChan, time.Second, p.logLevel)
 	p.lifecycleInlet = NewLifecycleInlet(lifecycleChan, time.Second)
@@ -117,7 +120,7 @@ func (p *Plot[S, F]) StopSpouts() {
 	p.lifecycleSpout.Stop()
 }
 
-// setEventClient 设置 plot 的事件客户端。
+// SetEventClient 设置 plot 的事件客户端。
 func (p *Plot[S, F]) SetEventClient(eventClient EventClient) {
 	p.eventClient = eventClient
 }
@@ -343,7 +346,7 @@ func (p *Plot[S, F]) tend(seedPayload Payload[S], sem chan struct{}, done chan s
 	}
 }
 
-// ==== Start ====
+// ==== Input & Async Execution ====
 
 // SeedAny 以 any 类型播入单颗种子，内部做类型断言。
 // 供 Farm 统一注入初始任务时使用。
@@ -374,7 +377,8 @@ func (p *Plot[S, F]) Seal() {
 
 // StartAsync 异步启动 sprout 调度器。
 // 调用前需先完成 BindInlet 绑定通道。
-// 外部通过 Seed 播种、Seal 终止；完成后需调用 WaitAsync 等待退出。
+// standalone 模式下通常由外部通过 Seed/Seal 控制输入；
+// Farm 模式下则由 Farm 注入初始种子并接收上游转发的 fruit。完成后需调用 WaitAsync 等待退出。
 func (p *Plot[S, F]) StartAsync() {
 	p.wg.Go(func() {
 		p.logInlet.StartPlot(p.name, p.numTends)
@@ -393,7 +397,7 @@ func (p *Plot[S, F]) WaitAsync() {
 	p.wg.Wait()
 }
 
-// ==== Run ====
+// ==== Standalone Execution & Harvest ====
 
 // Run 在 standalone 模式下启动 Plot 并处理所有种子。
 // 它会创建本地日志/生命周期 spout，绑定 inlet，并在所有输入完成后阻塞等待退出。
