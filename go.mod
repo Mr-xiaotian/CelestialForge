@@ -4,6 +4,10 @@ go 1.25.5
 
 toolchain go1.26.2
 
+replace github.com/Mr-xiaotian/CelestialGrow => /Users/liuxiaotian/Project/CelestialGrow
+
+require github.com/Mr-xiaotian/CelestialGrow v0.1.0
+
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
