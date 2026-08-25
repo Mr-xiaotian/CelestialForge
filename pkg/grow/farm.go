@@ -21,10 +21,10 @@ type Farm struct {
 
 	eventClient EventClient
 
-	logSpout  *funnel.Spout[LogRecord]
-	failSpout *funnel.Spout[FailRecord]
-	logInlet  *LogInlet
-	failInlet *FailInlet
+	logSpout       *funnel.Spout[LogRecord]
+	lifecycleSpout *funnel.Spout[LifecycleRecord]
+	logInlet       *LogInlet
+	lifecycleInlet *LifecycleInlet
 }
 
 // ==== Constructor ====
@@ -33,9 +33,9 @@ type Farm struct {
 // name 为 farm 名称（用于日志标识），logLevel 为全局日志级别。
 func NewFarm(name string, logLevel string) *Farm {
 	logSpout := funnel.NewSpout(&LogRecordHandler{}, 100, time.Second)
-	failSpout := funnel.NewSpout(&FailRecordHandler{}, 100, time.Second)
+	lifecycleSpout := funnel.NewSpout(&LifecycleRecordHandler{}, 100, time.Second)
 	logInlet := NewLogInlet(logSpout.GetQueue(), time.Second, logLevel)
-	failInlet := NewFailInlet(failSpout.GetQueue(), time.Second)
+	lifecycleInlet := NewLifecycleInlet(lifecycleSpout.GetQueue(), time.Second)
 	orderGraph := NewOrderGraph()
 
 	return &Farm{
@@ -46,10 +46,10 @@ func NewFarm(name string, logLevel string) *Farm {
 
 		eventClient: NewLocalEventClient(),
 
-		logSpout:  logSpout,
-		failSpout: failSpout,
-		logInlet:  logInlet,
-		failInlet: failInlet,
+		logSpout:       logSpout,
+		lifecycleSpout: lifecycleSpout,
+		logInlet:       logInlet,
+		lifecycleInlet: lifecycleInlet,
 	}
 }
 
@@ -211,15 +211,15 @@ func (f *Farm) Start(inputs map[string][]any) error {
 	f.sourceNodes = SourceNodes(f.orderGraph)
 
 	f.logSpout.Start()
-	f.failSpout.Start()
-	defer f.failSpout.Stop()
+	f.lifecycleSpout.Start()
+	defer f.lifecycleSpout.Stop()
 	defer f.logSpout.Stop()
 
 	startTime := time.Now()
 	f.logInlet.StartFarm(f.name)
 
 	for _, plot := range f.plots {
-		plot.BindInlet(f.logSpout.GetQueue(), f.failSpout.GetQueue())
+		plot.BindInlet(f.logSpout.GetQueue(), f.lifecycleSpout.GetQueue())
 	}
 
 	for _, plot := range f.plots {

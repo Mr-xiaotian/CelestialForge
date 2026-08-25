@@ -165,25 +165,6 @@ func UpsertLifecycleStatus(db *sql.DB, record LifecycleStatusRecord) error {
 	return nil
 }
 
-// UpdateLifecycleStatusCurrentEvent 更新状态快照当前绑定的事件和状态。
-func UpdateLifecycleStatusCurrentEvent(db *sql.DB, inputEventID int, currentEventID int, status string, ts float64) error {
-	_, err := db.Exec(
-		`
-		UPDATE status
-		SET current_event_id = ?, status = ?, ts = ?
-		WHERE input_event_id = ?
-		`,
-		currentEventID,
-		status,
-		ts,
-		inputEventID,
-	)
-	if err != nil {
-		return fmt.Errorf("update lifecycle status current event for input event %d: %w", inputEventID, err)
-	}
-	return nil
-}
-
 // PromoteLifecycleStatusSuccess 将一条状态快照晋升为成功。
 func PromoteLifecycleStatusSuccess(db *sql.DB, inputEventID int, currentEventID int, resultJSON string, ts float64) error {
 	_, err := db.Exec(

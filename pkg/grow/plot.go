@@ -23,7 +23,7 @@ type PlotNode interface {
 
 	ConnectTo(next PlotNode) error
 	AddUpstream(name string)
-	BindInlet(logChan chan<- LogRecord, failChan chan<- FailRecord)
+	BindInlet(logChan chan<- LogRecord, lifecycleChan chan<- LifecycleRecord)
 	SetEventClient(eventClient EventClient)
 
 	StartAsync()
@@ -49,10 +49,10 @@ type Plot[S any, F any] struct {
 
 	eventClient EventClient
 
-	logSpout  *funnel.Spout[LogRecord]
-	failSpout *funnel.Spout[FailRecord]
-	logInlet  *LogInlet
-	failInlet *FailInlet
+	logSpout       *funnel.Spout[LogRecord]
+	lifecycleSpout *funnel.Spout[LifecycleRecord]
+	logInlet       *LogInlet
+	lifecycleInlet *LifecycleInlet
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -97,24 +97,24 @@ func (p *Plot[S, F]) AddObserver(observer Observer) {
 
 // ==== Initialization ====
 
-// BindInlet 绑定日志和失败记录的写入通道。
+// BindInlet 绑定日志和生命周期记录的写入通道。
 // standalone 模式由 Run 创建本地 spout 后调用；
 // Farm 模式由 Farm.Start 统一调用。
-func (p *Plot[S, F]) BindInlet(logChan chan<- LogRecord, failChan chan<- FailRecord) {
+func (p *Plot[S, F]) BindInlet(logChan chan<- LogRecord, lifecycleChan chan<- LifecycleRecord) {
 	p.logInlet = NewLogInlet(logChan, time.Second, p.logLevel)
-	p.failInlet = NewFailInlet(failChan, time.Second)
+	p.lifecycleInlet = NewLifecycleInlet(lifecycleChan, time.Second)
 }
 
-// StartSpouts 启动本地日志/失败 spout。仅 standalone 模式使用。
+// StartSpouts 启动本地日志/生命周期 spout。仅 standalone 模式使用。
 func (p *Plot[S, F]) StartSpouts() {
 	p.logSpout.Start()
-	p.failSpout.Start()
+	p.lifecycleSpout.Start()
 }
 
-// StopSpouts 停止本地日志/失败 spout 并刷盘。仅 standalone 模式使用。
+// StopSpouts 停止本地日志/生命周期 spout 并刷盘。仅 standalone 模式使用。
 func (p *Plot[S, F]) StopSpouts() {
 	p.logSpout.Stop()
-	p.failSpout.Stop()
+	p.lifecycleSpout.Stop()
 }
 
 // setEventClient 设置 plot 的事件客户端。
@@ -195,7 +195,7 @@ func (p *Plot[S, F]) notifyFinish() {
 
 // ==== Result Handling ====
 
-// bearFruit 处理培育成功的种子：更新计数、记录日志、将果实发送到所有下游通道。
+// bearFruit 处理培育成功的种子：更新计数、记录日志、推进生命周期并发送果实。
 func (p *Plot[S, F]) bearFruit(seedPayload Payload[S], fruit F, startTime time.Time) {
 	p.AddFruitNum(1)
 	p.reportProgress()
@@ -208,15 +208,17 @@ func (p *Plot[S, F]) bearFruit(seedPayload Payload[S], fruit F, startTime time.T
 	fruitRepr := trunc(fmt.Sprintf("%+v", fruit), 25)
 	useTime := time.Since(startTime).Seconds()
 	p.logInlet.SeedRipen(p.name, seedRepr, fruitRepr, useTime, seedID, fruitID)
+	p.lifecycleInlet.SeedSuccess(p.name, seedID, seedID, fruitID, fruit)
 
-	for _, ch := range p.fruitChans {
-		seedID = p.eventClient.Emit("seed", []int{fruitID})
-		fruitPayload := Payload[F]{Value: fruit, EventID: seedID}
+	for nextPlot, ch := range p.fruitChans {
+		downstreamSeedID := p.eventClient.Emit("seed", []int{fruitID})
+		p.lifecycleInlet.SeedIn(nextPlot, downstreamSeedID, []int{fruitID}, fruit)
+		fruitPayload := Payload[F]{Value: fruit, EventID: downstreamSeedID}
 		ch <- fruitPayload
 	}
 }
 
-// bearWeed 处理培育失败的种子：更新计数、记录日志和失败记录。
+// bearWeed 处理培育失败的种子：更新计数、记录日志并推进生命周期。
 func (p *Plot[S, F]) bearWeed(seedPayload Payload[S], err error, startTime time.Time) {
 	p.AddWeedNum(1)
 	p.reportProgress()
@@ -229,7 +231,7 @@ func (p *Plot[S, F]) bearWeed(seedPayload Payload[S], err error, startTime time.
 	seedRepr := trunc(seedString, 50)
 	useTime := time.Since(startTime).Seconds()
 	p.logInlet.SeedWither(p.name, seedRepr, err, useTime, seedID, weedID)
-	p.failInlet.SeedWither(p.name, seedString, err)
+	p.lifecycleInlet.SeedFailed(p.name, seedID, seedID, weedID, err)
 }
 
 // ==== Internal Pipeline ====
@@ -317,10 +319,8 @@ func (p *Plot[S, F]) tend(seedPayload Payload[S], sem chan struct{}, done chan s
 
 	var fruit F
 	var err error
-	var replantID int
 
 	seed := seedPayload.Value
-	seedID := seedPayload.EventID
 
 	for attempt := 1; attempt <= p.maxRetries+1; attempt++ {
 		fruit, err = p.cultivator(seed)
@@ -331,14 +331,11 @@ func (p *Plot[S, F]) tend(seedPayload Payload[S], sem chan struct{}, done chan s
 			break
 		}
 		if attempt <= p.maxRetries {
-			replantID = p.eventClient.Emit("replant", []int{seedID})
-			p.logInlet.SeedReplant(p.name, seedRepr, attempt, err, seedID, replantID)
-			seedID = replantID
+			p.logInlet.SeedReplant(p.name, seedRepr, attempt, err)
 		}
 		time.Sleep(p.retryDelay(attempt))
 	}
 
-	seedPayload = Payload[S]{Value: seed, EventID: seedID}
 	if err != nil {
 		p.bearWeed(seedPayload, err, startTime)
 	} else {
@@ -362,16 +359,17 @@ func (p *Plot[S, F]) SeedAny(seed any) error {
 // Seed 播入单颗种子到 seedChan。
 // 该输入视为外部调用者注入，而非来自某个上游 plot。
 func (p *Plot[S, F]) Seed(seed S) {
-	seedId := p.eventClient.Emit("seed", []int{})
-	p.seedChan <- Payload[S]{Value: seed, EventID: seedId}
+	seedID := p.eventClient.Emit("seed", []int{})
+	p.lifecycleInlet.SeedIn(p.name, seedID, nil, seed)
+	p.seedChan <- Payload[S]{Value: seed, EventID: seedID}
 }
 
 // Seal 向 seedChan 发送来自外部 input 的 SignalSeal。
 // 这表示外部调用者要求终止该 plot 的后续输入处理；对于已连接上游的
 // plot，这同样会触发强终止，而不是继续等待剩余上游 seal。
 func (p *Plot[S, F]) Seal() {
-	sealId := p.eventClient.Emit("seal", []int{})
-	p.seedChan <- Payload[S]{Signal: SignalSeal, Source: sourceInput, EventID: sealId}
+	sealID := p.eventClient.Emit("seal", []int{})
+	p.seedChan <- Payload[S]{Signal: SignalSeal, Source: sourceInput, EventID: sealID}
 }
 
 // StartAsync 异步启动 sprout 调度器。
@@ -398,11 +396,11 @@ func (p *Plot[S, F]) WaitAsync() {
 // ==== Run ====
 
 // Run 在 standalone 模式下启动 Plot 并处理所有种子。
-// 它会创建本地日志/失败 spout，绑定 inlet，并在所有输入完成后阻塞等待退出。
+// 它会创建本地日志/生命周期 spout，绑定 inlet，并在所有输入完成后阻塞等待退出。
 func (p *Plot[S, F]) Run(seeds []S) {
 	p.logSpout = funnel.NewSpout(&LogRecordHandler{}, 100, time.Second)
-	p.failSpout = funnel.NewSpout(&FailRecordHandler{}, 100, time.Second)
-	p.BindInlet(p.logSpout.GetQueue(), p.failSpout.GetQueue())
+	p.lifecycleSpout = funnel.NewSpout(&LifecycleRecordHandler{}, 100, time.Second)
+	p.BindInlet(p.logSpout.GetQueue(), p.lifecycleSpout.GetQueue())
 
 	p.StartSpouts()
 	defer p.StopSpouts()

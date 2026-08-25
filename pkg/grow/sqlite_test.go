@@ -60,7 +60,6 @@ func TestLifecycleSQLiteStatusRoundTrip(t *testing.T) {
 
 	for _, record := range []LifecycleEventRecord{
 		{EventID: 1, EventType: "seed", Plot: "stage_a", TS: 1.0},
-		{EventID: 2, EventType: "replant", Plot: "stage_a", TS: 2.0},
 		{EventID: 3, EventType: "fruit", Plot: "stage_a", TS: 3.0},
 	} {
 		if err := InsertLifecycleEvent(db, record, nil); err != nil {
@@ -78,10 +77,6 @@ func TestLifecycleSQLiteStatusRoundTrip(t *testing.T) {
 		TS:             1.0,
 	}); err != nil {
 		t.Fatalf("UpsertLifecycleStatus() error = %v", err)
-	}
-
-	if err := UpdateLifecycleStatusCurrentEvent(db, 1, 2, "retrying", 2.0); err != nil {
-		t.Fatalf("UpdateLifecycleStatusCurrentEvent() error = %v", err)
 	}
 
 	if err := PromoteLifecycleStatusSuccess(db, 1, 3, `{"ok":true}`, 3.0); err != nil {

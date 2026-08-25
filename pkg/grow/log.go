@@ -146,6 +146,6 @@ func (l *LogInlet) SeedWither(plotName string, seedRepr string, err error, useTi
 }
 
 // SeedReplant 记录种子重新种植（重试），包含当前尝试次数和错误信息。
-func (l *LogInlet) SeedReplant(plotName string, seedRepr string, attempt int, err error, seedID int, replantID int) {
-	l.log("WARNING", fmt.Sprintf("In '%s', Seed %s attempt %d withered: %v. Replanting... [%d->%d*]", plotName, seedRepr, attempt, err, seedID, replantID))
+func (l *LogInlet) SeedReplant(plotName string, seedRepr string, attempt int, err error) {
+	l.log("WARNING", fmt.Sprintf("In '%s', Seed %s attempt %d withered: %v. Replanting...", plotName, seedRepr, attempt, err))
 }
