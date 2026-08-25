@@ -209,8 +209,9 @@ func (p *Plot[S, F]) bearFruit(seedPayload Payload[S], fruit F, startTime time.T
 	useTime := time.Since(startTime).Seconds()
 	p.logInlet.SeedRipen(p.name, seedRepr, fruitRepr, useTime, seedID, fruitID)
 
-	fruitPayload := Payload[F]{Value: fruit, EventID: fruitID}
 	for _, ch := range p.fruitChans {
+		seedID = p.eventClient.Emit("seed", []int{fruitID})
+		fruitPayload := Payload[F]{Value: fruit, EventID: seedID}
 		ch <- fruitPayload
 	}
 }
