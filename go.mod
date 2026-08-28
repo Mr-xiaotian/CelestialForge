@@ -4,7 +4,7 @@ go 1.25.5
 
 toolchain go1.26.2
 
-replace github.com/Mr-xiaotian/CelestialGrow => /Users/liuxiaotian/Project/CelestialGrow
+replace github.com/Mr-xiaotian/CelestialGrow => ../CelestialGrow
 
 require github.com/Mr-xiaotian/CelestialGrow v0.1.0
 
