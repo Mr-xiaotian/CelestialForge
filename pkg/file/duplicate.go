@@ -28,13 +28,13 @@ func harvestStatusMap(plot *grow.Plot[string, string]) (map[string]string, error
 		}
 
 		switch record.Status {
-		case "success":
+		case "ripen":
 			var hash string
 			if err := json.Unmarshal([]byte(record.ResultJSON), &hash); err != nil {
 				return nil, fmt.Errorf("解析任务结果失败: %w", err)
 			}
 			resultMap[path] = hash
-		case "failed":
+		case "wither":
 			return nil, fmt.Errorf("处理文件失败 %q: %s", path, record.ErrorMessage)
 		default:
 			return nil, fmt.Errorf("任务 %q 处于未完成状态: %s", path, record.Status)
@@ -65,7 +65,7 @@ func getSizeDuplicate(fileInfoMap FileInfoMap) []string {
 // getSnapshotDuplicate 用文件前 4KB 的快照哈希进一步过滤重复候选。
 func getSnapshotDuplicate(fileSizeDuplicates []string, numTends int) ([]string, error) {
 	// 并行计算文件hash
-	plot := grow.NewPlot("SnapshotPlot", GetFileSnapshotSHA1, grow.WithTends(numTends))
+	plot := grow.NewPlot("SnapshotPlot", GetFileSnapshotSHA1, grow.WithTenders(numTends))
 	plot.AddObserver(grow.NewProgressBar("Snapshoting files"))
 	plot.Run(fileSizeDuplicates)
 
@@ -94,7 +94,7 @@ func getSnapshotDuplicate(fileSizeDuplicates []string, numTends int) ([]string, 
 // getHashDuplicate 用完整文件哈希确认最终重复文件。
 func getHashDuplicate(fileSnapshotDuplicates []string, fileInfoMap FileInfoMap, numTends int) (map[FileInfo][]string, error) {
 	// 并行计算文件hash
-	plot := grow.NewPlot("HashPlot", GetFileSHA1, grow.WithTends(numTends))
+	plot := grow.NewPlot("HashPlot", GetFileSHA1, grow.WithTenders(numTends))
 	plot.AddObserver(grow.NewProgressBar("Hashing files"))
 	plot.Run(fileSnapshotDuplicates)
 
